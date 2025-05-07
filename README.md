@@ -17,44 +17,40 @@ El sistema sigue una arquitectura hexagonal (puertos y adaptadores) que separa l
 ### Diagrama de Arquitectura
 
 ```
-                ┌───────────────────┐      ┌───────────────────┐
-                │  TransactionService│      │  AntiFraudService │
-                └─────────┬─────────┘      └─────────┬─────────┘
-                          │                          │
-                          ▼                          ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│           API Layer                 │   │           API Layer             │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│        Application Layer            │   │        Application Layer        │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│         Domain Layer                │   │         Domain Layer            │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│      Infrastructure Layer           │   │      Infrastructure Layer       │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-      ┌───────────────┐                          ┌───────────────┐
-      │  SQL Server   │◄────────────────────────►│    Kafka      │
-      └───────────────┘                          └───────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Clientes / Frontend                           │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                                                                           │
+│  ┌────────────────────────────┐              ┌────────────────────────┐   │
+│  │                            │              │                        │   │
+│  │     TransactionService     │◄────────────►│    AntiFraudService    │   │
+│  │                            │     Kafka    │                        │   │
+│  └─────────────┬──────────────┘              └────────────┬───────────┘   │
+│                │                                          │               │
+│                │                                          │               │
+│                │                                          │               │
+│                ▼                                          ▼               │
+│   ┌─────────────────────────┐                ┌─────────────────────────┐  │
+│   │                         │                │                         │  │
+│   │       SQL Server        │◄──────────────►│       SQL Server        │  │
+│   │  (TransactionDB)        │                │    (AntiFraudDB)        │  │
+│   │                         │                │                         │  │
+│   └─────────────────────────┘                └─────────────────────────┘  │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Flujo de Comunicación
 
 1. **TransactionService** recibe una solicitud para crear una transacción.
-2. La transacción se guarda en estado "pending" en la base de datos.
+2. La transacción se guarda en estado "pending" en la base de datos (SQL Server).
 3. Un mensaje se envía a través de Kafka para que sea validado por **AntiFraudService**.
-4. **AntiFraudService** recibe el mensaje, valida la transacción según las reglas anti-fraude.
+4. **AntiFraudService** recibe el mensaje, consulta información histórica en SQL Server y valida la transacción según las reglas anti-fraude.
 5. **AntiFraudService** envía un mensaje de respuesta a través de Kafka.
-6. **TransactionService** recibe la respuesta y actualiza el estado de la transacción a "approved" o "rejected".
+6. **TransactionService** recibe la respuesta y actualiza el estado de la transacción a "approved" o "rejected" en SQL Server.
 
 ## Reglas de Validación
 
