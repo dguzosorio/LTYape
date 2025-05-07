@@ -18,6 +18,11 @@ namespace TransactionService.Domain.Enums
         /// <summary>
         /// Transaction has failed fraud validation and is rejected
         /// </summary>
-        Rejected = 3
+        Rejected = 3,
+
+        /// <summary>
+        /// Transaction has been successfully processed and completed
+        /// </summary>
+        Completed = 4
     }
 } 

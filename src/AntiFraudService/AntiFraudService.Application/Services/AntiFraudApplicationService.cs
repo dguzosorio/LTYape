@@ -1,7 +1,11 @@
+using System;
 using System.Threading.Tasks;
 using AntiFraudService.Application.DTOs;
 using AntiFraudService.Domain.Models;
 using AntiFraudService.Domain.Services;
+using AntiFraudService.Domain.Entities;
+using AntiFraudService.Domain.Enums;
+using AntiFraudService.Domain.Repositories;
 
 namespace AntiFraudService.Application.Services
 {
@@ -11,14 +15,19 @@ namespace AntiFraudService.Application.Services
     public class AntiFraudApplicationService : IAntiFraudApplicationService
     {
         private readonly IAntiFraudDomainService _antiFraudDomainService;
+        private readonly ITransactionValidationRepository _validationRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AntiFraudApplicationService"/> class
         /// </summary>
         /// <param name="antiFraudDomainService">The anti-fraud domain service</param>
-        public AntiFraudApplicationService(IAntiFraudDomainService antiFraudDomainService)
+        /// <param name="validationRepository">The repository for accessing validation records</param>
+        public AntiFraudApplicationService(
+            IAntiFraudDomainService antiFraudDomainService,
+            ITransactionValidationRepository validationRepository)
         {
             _antiFraudDomainService = antiFraudDomainService;
+            _validationRepository = validationRepository;
         }
 
         /// <summary>
@@ -33,6 +42,51 @@ namespace AntiFraudService.Application.Services
             
             // Process the validation through the domain service
             await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
+        }
+
+        /// <summary>
+        /// Validates a transaction against fraud rules
+        /// </summary>
+        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <param name="sourceAccountId">The identifier of the source account</param>
+        /// <param name="value">The monetary value of the transaction</param>
+        /// <param name="createdAt">The creation date of the transaction</param>
+        /// <returns>The transaction validation result</returns>
+        public async Task<TransactionValidation> ValidateTransactionAsync(
+            Guid transactionExternalId,
+            Guid sourceAccountId,
+            decimal value,
+            DateTime createdAt)
+        {
+            // Crear un objeto TransactionData con los datos proporcionados
+            var transactionData = new TransactionData
+            {
+                TransactionExternalId = transactionExternalId,
+                SourceAccountId = sourceAccountId,
+                Value = value,
+                CreatedAt = createdAt
+            };
+            
+            // Ejecutar la validación (este método no devuelve un resultado, solo realiza la validación)
+            await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
+            
+            // Obtener la validación recién creada desde el repositorio
+            var validation = await _validationRepository.GetByTransactionExternalIdAsync(transactionExternalId);
+            
+            if (validation == null)
+            {
+                // Si por alguna razón no se encontró la validación, crear una por defecto
+                validation = TransactionValidation.CreateRejected(
+                    transactionExternalId,
+                    sourceAccountId,
+                    value,
+                    RejectionReason.Other,
+                    "Error al procesar la validación");
+                
+                await _validationRepository.AddAsync(validation);
+            }
+            
+            return validation;
         }
 
         /// <summary>
@@ -51,6 +105,22 @@ namespace AntiFraudService.Application.Services
                 Value = request.Value,
                 CreatedAt = request.CreatedAt
             };
+        }
+        
+        /// <summary>
+        /// Determines the domain rejection reason from a string representation
+        /// </summary>
+        /// <param name="rejectionReasonString">String representation of rejection reason</param>
+        /// <returns>Domain rejection reason enum value</returns>
+        private RejectionReason DetermineRejectionReason(string rejectionReasonString)
+        {
+            if (string.IsNullOrEmpty(rejectionReasonString))
+                return RejectionReason.None;
+                
+            if (Enum.TryParse<RejectionReason>(rejectionReasonString, true, out var reason))
+                return reason;
+                
+            return RejectionReason.Other;
         }
     }
 } 

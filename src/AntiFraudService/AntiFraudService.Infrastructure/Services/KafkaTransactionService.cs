@@ -7,6 +7,7 @@ using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka;
 using AntiFraudService.Infrastructure.Kafka.Messages;
+using AntiFraudService.Domain.Models;
 
 namespace AntiFraudService.Infrastructure.Services
 {
@@ -33,6 +34,43 @@ namespace AntiFraudService.Infrastructure.Services
             _kafkaProducer = kafkaProducer;
             _configuration = configuration;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Sends a validation response back to the Transaction service
+        /// </summary>
+        /// <param name="response">The validation response to send</param>
+        /// <returns>A task representing the asynchronous operation</returns>
+        public async Task SendValidationResponseAsync(ValidationResponse response)
+        {
+            try
+            {
+                var topic = _configuration["Kafka:Topics:TransactionValidationResponse"];
+                
+                var message = MapResponseToMessage(response);
+                
+                _logger.LogInformation(
+                    "Sending validation response for transaction {TransactionId}",
+                    response.TransactionExternalId);
+                
+                await _kafkaProducer.ProduceAsync(
+                    topic,
+                    response.TransactionExternalId.ToString(),
+                    message);
+                
+                _logger.LogInformation(
+                    "Validation response for transaction {TransactionId} sent",
+                    response.TransactionExternalId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error sending validation response for transaction {TransactionId}",
+                    response.TransactionExternalId);
+                
+                throw;
+            }
         }
         
         /// <summary>
@@ -82,6 +120,19 @@ namespace AntiFraudService.Infrastructure.Services
                     ? validation.RejectionReason.ToString() 
                     : null,
                 Notes = validation.Notes
+            };
+        }
+
+        private TransactionValidationResponseMessage MapResponseToMessage(ValidationResponse response)
+        {
+            return new TransactionValidationResponseMessage
+            {
+                TransactionExternalId = response.TransactionExternalId,
+                IsValid = response.Result == ValidationResult.Approved,
+                RejectionReason = response.Result == ValidationResult.Rejected 
+                    ? response.RejectionReason.ToString() 
+                    : null,
+                Notes = response.Notes
             };
         }
     }

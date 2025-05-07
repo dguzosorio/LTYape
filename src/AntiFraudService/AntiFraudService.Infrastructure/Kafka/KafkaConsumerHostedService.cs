@@ -10,6 +10,7 @@ using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Repositories;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka.Messages;
+using AntiFraudService.Application.Services;
 
 namespace AntiFraudService.Infrastructure.Kafka
 {

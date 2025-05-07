@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerUI;
 using TransactionService.Application.Services;
 using TransactionService.Domain.Repositories;
 using TransactionService.Domain.Services;

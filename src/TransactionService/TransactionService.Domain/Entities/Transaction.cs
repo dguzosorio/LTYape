@@ -44,6 +44,11 @@ namespace TransactionService.Domain.Entities
         public TransactionStatus Status { get; private set; }
         
         /// <summary>
+        /// Additional notes or comments about the transaction
+        /// </summary>
+        public string Notes { get; private set; }
+        
+        /// <summary>
         /// Date and time when the transaction was created
         /// </summary>
         public DateTime CreatedAt { get; private set; }
@@ -72,6 +77,7 @@ namespace TransactionService.Domain.Entities
             Value = value;
             Status = TransactionStatus.Pending;
             CreatedAt = DateTime.UtcNow;
+            Notes = string.Empty;
         }
 
         /// <summary>
@@ -85,6 +91,16 @@ namespace TransactionService.Domain.Entities
         }
 
         /// <summary>
+        /// Updates the notes of the transaction
+        /// </summary>
+        /// <param name="notes">The new notes to set</param>
+        public void UpdateNotes(string notes)
+        {
+            Notes = notes ?? string.Empty;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
         /// Marks the transaction as approved
         /// </summary>
         public void Approve()
@@ -93,11 +109,24 @@ namespace TransactionService.Domain.Entities
         }
 
         /// <summary>
-        /// Marks the transaction as rejected
+        /// Marks the transaction as rejected with optional notes
         /// </summary>
-        public void Reject()
+        /// <param name="notes">Optional notes explaining the rejection</param>
+        public void Reject(string notes = null)
         {
             UpdateStatus(TransactionStatus.Rejected);
+            if (!string.IsNullOrEmpty(notes))
+            {
+                UpdateNotes(notes);
+            }
+        }
+
+        /// <summary>
+        /// Marks the transaction as completed
+        /// </summary>
+        public void Complete()
+        {
+            UpdateStatus(TransactionStatus.Completed);
         }
     }
 } 

@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -22,7 +21,7 @@ namespace TransactionService.Infrastructure.Kafka
         private readonly IKafkaConsumer _kafkaConsumer;
         private readonly IConfiguration _configuration;
         private readonly ILogger<KafkaConsumerHostedService> _logger;
-        private IDisposable _subscription;
+        private IDisposable? _subscription;
         
         /// <summary>
         /// Initializes a new instance of the <see cref="KafkaConsumerHostedService"/> class
@@ -84,15 +83,12 @@ namespace TransactionService.Infrastructure.Kafka
                 
                 if (message.IsValid)
                 {
-                    transaction.Status = TransactionStatus.Completed;
+                    transaction.Complete();
                 }
                 else
                 {
-                    transaction.Status = TransactionStatus.Rejected;
-                    transaction.Notes = $"Rejected: {message.RejectionReason}. {message.Notes}";
+                    transaction.Reject($"Rejected: {message.RejectionReason}. {message.Notes}");
                 }
-                
-                transaction.UpdatedAt = DateTime.UtcNow;
                 
                 await transactionRepository.UpdateAsync(transaction);
                 

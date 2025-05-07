@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerUI;
 using AntiFraudService.Application.Services;
 using AntiFraudService.Domain.Repositories;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka;
 using AntiFraudService.Infrastructure.Persistence;
-using AntiFraudService.Infrastructure.Repositories;
 using AntiFraudService.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
