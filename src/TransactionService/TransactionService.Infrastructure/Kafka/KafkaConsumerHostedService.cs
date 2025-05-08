@@ -5,8 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using TransactionService.Domain.Entities;
-using TransactionService.Domain.Enums;
 using TransactionService.Domain.Repositories;
 using TransactionService.Infrastructure.Kafka.Messages;
 
@@ -51,11 +49,45 @@ namespace TransactionService.Infrastructure.Kafka
         {
             var responseTopic = _configuration["Kafka:Topics:TransactionValidationResponse"];
             
+            if (string.IsNullOrEmpty(responseTopic))
+            {
+                _logger.LogError("The 'TransactionValidationResponse' topic configuration is not defined. The service will not start the subscription.");
+                return Task.CompletedTask;
+            }
+            
             _logger.LogInformation("Starting Kafka consumer for topic: {Topic}", responseTopic);
             
-            _subscription = _kafkaConsumer.Subscribe<string, TransactionValidationResponseMessage>(
-                responseTopic,
-                (key, message) => HandleValidationResponseAsync(key, message).GetAwaiter().GetResult());
+            try
+            {
+                _subscription = _kafkaConsumer.Subscribe<string, TransactionValidationResponseMessage>(
+                    responseTopic,
+                    (key, message) => HandleValidationResponseAsync(key, message).GetAwaiter().GetResult());
+                
+                _logger.LogInformation("Kafka subscription successfully started for topic: {Topic}", responseTopic);
+                
+                // Periodically verify the connection with Kafka
+                Task.Run(async () =>
+                {
+                    while (!stoppingToken.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            // Wait before checking again
+                            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                            _logger.LogInformation("Kafka subscription is still active for topic: {Topic}", responseTopic);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting Kafka subscription for topic: {Topic}. Error: {ErrorMessage}", 
+                    responseTopic, ex.Message);
+            }
             
             return Task.CompletedTask;
         }
@@ -67,12 +99,25 @@ namespace TransactionService.Infrastructure.Kafka
         /// <param name="message">Validation response message</param>
         private async Task HandleValidationResponseAsync(string key, TransactionValidationResponseMessage message)
         {
-            _logger.LogInformation("Received validation response for transaction: {TransactionId}", message.TransactionExternalId);
+            if (message == null)
+            {
+                _logger.LogWarning("Received validation response message is null");
+                return;
+            }
+            
+            _logger.LogInformation("Validation response received for transaction: {TransactionId}, Valid: {IsValid}, Reason: {Reason}",
+                message.TransactionExternalId, message.IsValid, message.RejectionReason ?? "N/A");
             
             try
             {
                 using var scope = _serviceProvider.CreateScope();
                 var transactionRepository = scope.ServiceProvider.GetRequiredService<ITransactionRepository>();
+                
+                if (transactionRepository == null)
+                {
+                    _logger.LogError("Could not resolve ITransactionRepository service");
+                    return;
+                }
                 
                 var transaction = await transactionRepository.GetByExternalIdAsync(message.TransactionExternalId);
                 if (transaction == null)
@@ -81,24 +126,33 @@ namespace TransactionService.Infrastructure.Kafka
                     return;
                 }
                 
+                _logger.LogInformation("Current status of transaction {TransactionId}: {Status}", 
+                    transaction.TransactionExternalId, transaction.Status);
+                
                 if (message.IsValid)
                 {
                     transaction.Complete();
+                    _logger.LogInformation("Transaction {TransactionId} marked as APPROVED", transaction.TransactionExternalId);
                 }
                 else
                 {
                     transaction.Reject($"Rejected: {message.RejectionReason}. {message.Notes}");
+                    _logger.LogInformation("Transaction {TransactionId} marked as REJECTED. Reason: {Reason}", 
+                        transaction.TransactionExternalId, message.RejectionReason);
                 }
                 
                 await transactionRepository.UpdateAsync(transaction);
                 
                 _logger.LogInformation(
-                    "Updated transaction {TransactionId} status to {Status}",
+                    "Transaction {TransactionId} updated with status: {Status}",
                     transaction.TransactionExternalId, transaction.Status);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing validation response for transaction: {TransactionId}", message.TransactionExternalId);
+                _logger.LogError(ex, "Error processing validation response for transaction: {TransactionId}. Details: {ErrorMessage}",
+                    message.TransactionExternalId, ex.ToString());
+                
+                // Consider whether to retry or notify a monitoring system
             }
         }
         

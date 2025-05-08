@@ -82,8 +82,16 @@ namespace TransactionService.Infrastructure.Kafka
                         var consumeResult = consumer.Consume(cancellationToken);
                         if (consumeResult != null)
                         {
-                            var key = JsonSerializer.Deserialize<TKey>(consumeResult.Message.Key);
-                            var value = JsonSerializer.Deserialize<TValue>(consumeResult.Message.Value);
+                            var key = typeof(TKey) == typeof(string) 
+                                ? (TKey)(object)consumeResult.Message.Key 
+                                : JsonSerializer.Deserialize<TKey>(consumeResult.Message.Key);
+                            
+                            var value = JsonSerializer.Deserialize<TValue>(
+                                consumeResult.Message.Value,
+                                new JsonSerializerOptions 
+                                { 
+                                    PropertyNameCaseInsensitive = true 
+                                });
                             
                             handler(key, value);
                             
@@ -102,7 +110,7 @@ namespace TransactionService.Infrastructure.Kafka
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Unexpected error while consuming messages");
+                        _logger.LogError(ex, "Unexpected error while consuming messages: {Message}", ex.Message);
                     }
                 }
             }

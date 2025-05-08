@@ -5,12 +5,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Enums;
-using AntiFraudService.Domain.Repositories;
-using AntiFraudService.Domain.Services;
-using AntiFraudService.Infrastructure.Kafka.Messages;
 using AntiFraudService.Application.Services;
+using AntiFraudService.Infrastructure.Kafka.Messages;
 
 namespace AntiFraudService.Infrastructure.Kafka
 {
@@ -53,11 +50,27 @@ namespace AntiFraudService.Infrastructure.Kafka
         {
             var requestTopic = _configuration["Kafka:Topics:TransactionValidationRequest"];
             
+            if (string.IsNullOrEmpty(requestTopic))
+            {
+                _logger.LogError("The 'TransactionValidationRequest' topic configuration is not defined. The service will not start the subscription.");
+                return Task.CompletedTask;
+            }
+            
             _logger.LogInformation("Starting Kafka consumer for topic: {Topic}", requestTopic);
             
-            _subscription = _kafkaConsumer.Subscribe<string, TransactionValidationRequestMessage>(
-                requestTopic,
-                (key, message) => HandleValidationRequestAsync(key, message).GetAwaiter().GetResult());
+            try 
+            {
+                _subscription = _kafkaConsumer.Subscribe<string, TransactionValidationRequestMessage>(
+                    requestTopic,
+                    (key, message) => HandleValidationRequestAsync(key, message).GetAwaiter().GetResult());
+                
+                _logger.LogInformation("Kafka subscription successfully started for topic: {Topic}", requestTopic);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting Kafka subscription for topic: {Topic}. Error: {ErrorMessage}", 
+                    requestTopic, ex.Message);
+            }
             
             return Task.CompletedTask;
         }
@@ -69,12 +82,25 @@ namespace AntiFraudService.Infrastructure.Kafka
         /// <param name="message">Validation request message</param>
         private async Task HandleValidationRequestAsync(string key, TransactionValidationRequestMessage message)
         {
-            _logger.LogInformation("Received validation request for transaction: {TransactionId}", message.TransactionExternalId);
+            if (message == null)
+            {
+                _logger.LogWarning("Received validation message is null");
+                return;
+            }
+            
+            _logger.LogInformation("Validation request received for transaction: {TransactionId}, Amount: {Amount}, Source account: {SourceAccount}", 
+                message.TransactionExternalId, message.Value, message.SourceAccountId);
             
             try
             {
                 using var scope = _serviceProvider.CreateScope();
                 var antiFraudApplicationService = scope.ServiceProvider.GetRequiredService<IAntiFraudApplicationService>();
+                
+                if (antiFraudApplicationService == null)
+                {
+                    _logger.LogError("Could not resolve IAntiFraudApplicationService service");
+                    return;
+                }
                 
                 var validation = await antiFraudApplicationService.ValidateTransactionAsync(
                     message.TransactionExternalId,
@@ -82,13 +108,25 @@ namespace AntiFraudService.Infrastructure.Kafka
                     message.Value,
                     message.CreatedAt);
                 
+                if (validation == null)
+                {
+                    _logger.LogError("Validation returned null for transaction {TransactionId}", message.TransactionExternalId);
+                    return;
+                }
+                
                 _logger.LogInformation(
-                    "Validated transaction {TransactionId} with result: {Result}",
-                    message.TransactionExternalId, validation.Result);
+                    "Transaction {TransactionId} validated with result: {Result}, Reason: {Reason}, Notes: {Notes}",
+                    message.TransactionExternalId, 
+                    validation.Result,
+                    validation.Result == ValidationResult.Rejected ? validation.RejectionReason.ToString() : "N/A",
+                    validation.Notes);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing validation request for transaction: {TransactionId}", message.TransactionExternalId);
+                _logger.LogError(ex, "Error processing validation request for transaction: {TransactionId}. Details: {ErrorMessage}", 
+                    message.TransactionExternalId, ex.ToString());
+                
+                // Consider whether to retry or notify a monitoring system
             }
         }
         

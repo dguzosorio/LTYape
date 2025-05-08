@@ -1,102 +1,126 @@
-version: '3.8'
+version: "3.7"
 
 services:
-  # Infraestructura
+  # Base de datos SQL Server
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: sqlserver
+    ports:
+      - "1433:1433"
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=Pass@word1
-    ports:
-      - "1433:1433"
     volumes:
-      - sqlserver-data:/var/opt/mssql
+      - sqlserver_data:/var/opt/mssql
     networks:
-      - ltyape-network
-    healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "Pass@word1" -Q "SELECT 1" -b -o /dev/null
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
+      - yape-network
+    restart: always
 
+  # Infraestructura Kafka
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    ports:
-      - "2181:2181"
+    image: confluentinc/cp-zookeeper:5.5.3
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
     networks:
-      - ltyape-network
-    healthcheck:
-      test: echo ruok | nc localhost 2181 || exit 1
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+      - yape-network
 
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-enterprise-kafka:5.5.3
+    container_name: kafka
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - zookeeper
     ports:
       - "9092:9092"
       - "29092:29092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_BROKER_ID: 1
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_MS: 86400000
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_JMX_PORT: 9991
+      # Define topics that will be created automatically
+      KAFKA_CREATE_TOPICS: "transaction-validation-request:1:1,transaction-validation-response:1:1"
     networks:
-      - ltyape-network
-    healthcheck:
-      test: kafka-topics --bootstrap-server kafka:29092 --list
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      - yape-network
 
-  # Microservicios
+  # Service to verify that topics are created
+  init-kafka:
+    image: confluentinc/cp-enterprise-kafka:5.5.3
+    container_name: init-kafka
+    depends_on:
+      - kafka
+    command: >
+      bash -c '
+      echo "Waiting for Kafka to be available..."
+      cub kafka-ready -b kafka:9092 1 180 &&
+      echo "Creating topics..." &&
+      kafka-topics --bootstrap-server kafka:9092 --create --topic transaction-validation-request --partitions 1 --replication-factor 1 || true &&
+      kafka-topics --bootstrap-server kafka:9092 --create --topic transaction-validation-response --partitions 1 --replication-factor 1 || true &&
+      echo "Available topics:" &&
+      kafka-topics --bootstrap-server kafka:9092 --list
+      '
+    networks:
+      - yape-network
+
+  # Transaction API
   transaction-service:
     build:
-      context: .
-      dockerfile: src/TransactionService/Dockerfile
+      context: ./src/TransactionService
+      dockerfile: Dockerfile
+    container_name: transaction-service
     depends_on:
-      sqlserver:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - kafka
+      - sqlserver
+      - init-kafka
     ports:
       - "5001:80"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TransactionDb;User Id=sa;Password=Pass@word1;TrustServerCertificate=True;
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__GroupId=transaction-service
+      - Kafka__Topics__TransactionValidationRequest=transaction-validation-request
+      - Kafka__Topics__TransactionValidationResponse=transaction-validation-response
     networks:
-      - ltyape-network
+      - yape-network
+    restart: on-failure
 
+  # Anti-Fraud API
   antifraud-service:
     build:
-      context: .
-      dockerfile: src/AntiFraudService/Dockerfile
+      context: ./src/AntiFraudService
+      dockerfile: Dockerfile
+    container_name: antifraud-service
     depends_on:
-      sqlserver:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - kafka
+      - sqlserver
+      - init-kafka
     ports:
       - "5002:80"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AntiFraudDb;User Id=sa;Password=Pass@word1;TrustServerCertificate=True;
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__GroupId=antifraud-service
+      - Kafka__Topics__TransactionValidationRequest=transaction-validation-request
+      - Kafka__Topics__TransactionValidationResponse=transaction-validation-response
     networks:
-      - ltyape-network
+      - yape-network
+    restart: on-failure
 
 networks:
-  ltyape-network:
+  yape-network:
     driver: bridge
 
 volumes:
-  sqlserver-data: 
+  sqlserver_data: 

@@ -74,7 +74,9 @@ namespace AntiFraudService.Domain.Entities
             ValidationDate = DateTime.UtcNow;
             Result = result;
             RejectionReason = rejectionReason;
-            Notes = notes;
+            Notes = notes ?? (result == ValidationResult.Approved 
+                ? "Transaction approved" 
+                : $"Transaction rejected: {rejectionReason}");
         }
 
         /// <summary>
@@ -93,7 +95,9 @@ namespace AntiFraudService.Domain.Entities
                 transactionExternalId,
                 sourceAccountId,
                 transactionAmount,
-                ValidationResult.Approved);
+                ValidationResult.Approved,
+                RejectionReason.None,
+                "Transaction approved");
         }
 
         /// <summary>
@@ -118,7 +122,7 @@ namespace AntiFraudService.Domain.Entities
                 transactionAmount,
                 ValidationResult.Rejected,
                 reason,
-                notes);
+                notes ?? $"Transaction rejected: {reason}");
         }
     }
 } 

@@ -58,7 +58,6 @@ namespace AntiFraudService.Application.Services
             decimal value,
             DateTime createdAt)
         {
-            // Crear un objeto TransactionData con los datos proporcionados
             var transactionData = new TransactionData
             {
                 TransactionExternalId = transactionExternalId,
@@ -67,21 +66,21 @@ namespace AntiFraudService.Application.Services
                 CreatedAt = createdAt
             };
             
-            // Ejecutar la validación (este método no devuelve un resultado, solo realiza la validación)
+            // Execute validation (this method doesn't return a result, it just performs the validation)
             await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
             
-            // Obtener la validación recién creada desde el repositorio
+            // Get the newly created validation from the repository
             var validation = await _validationRepository.GetByTransactionExternalIdAsync(transactionExternalId);
             
+            // If for some reason the validation wasn't found, create a default one
             if (validation == null)
             {
-                // Si por alguna razón no se encontró la validación, crear una por defecto
                 validation = TransactionValidation.CreateRejected(
                     transactionExternalId,
                     sourceAccountId,
                     value,
                     RejectionReason.Other,
-                    "Error al procesar la validación");
+                    "Error processing validation");
                 
                 await _validationRepository.AddAsync(validation);
             }

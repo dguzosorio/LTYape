@@ -1,70 +1,118 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-using Swashbuckle.AspNetCore.SwaggerUI;
 using AntiFraudService.Application.Services;
 using AntiFraudService.Domain.Repositories;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka;
 using AntiFraudService.Infrastructure.Persistence;
 using AntiFraudService.Infrastructure.Services;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace AntiFraudService.API;
 
-// Add services to the container.
-builder.Services.AddControllers();
-
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
+public class Program
 {
-    options.SwaggerDoc("v1", new() { Title = "Anti-Fraud Service API", Version = "v1" });
-});
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-// Register application services
-builder.Services.AddScoped<IAntiFraudApplicationService, AntiFraudApplicationService>();
+        // Add services to the container.
+        builder.Services.AddControllers();
 
-// Register domain services
-builder.Services.AddScoped<IAntiFraudDomainService, AntiFraudDomainService>();
-builder.Services.AddScoped<ITransactionService, KafkaTransactionService>();
+        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new() { Title = "Anti-Fraud Service API", Version = "v1" });
+        });
 
-// Register validation rules
-builder.Services.AddScoped<IValidationRuleService, MaximumAmountValidationService>();
-builder.Services.AddScoped<IValidationRuleService, DailyLimitValidationService>();
+        // Register application services
+        builder.Services.AddScoped<IAntiFraudApplicationService, AntiFraudApplicationService>();
 
-// Register repositories
-builder.Services.AddScoped<ITransactionValidationRepository, TransactionValidationRepository>();
+        // Register domain services
+        builder.Services.AddScoped<IAntiFraudDomainService, AntiFraudDomainService>();
+        builder.Services.AddScoped<ITransactionService, KafkaTransactionService>();
 
-// Configure database
-builder.Services.AddDbContext<AntiFraudDbContext>(options =>
-{
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure());
-});
+        // Register validation rules
+        builder.Services.AddScoped<IValidationRuleService, MaximumAmountValidationService>();
+        builder.Services.AddScoped<IValidationRuleService, DailyLimitValidationService>();
 
-// Configure Kafka
-builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
-builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
-builder.Services.AddHostedService<KafkaConsumerHostedService>();
+        // Register repositories
+        builder.Services.AddScoped<ITransactionValidationRepository, TransactionValidationRepository>();
 
-var app = builder.Build();
+        // Configure database
+        builder.Services.AddDbContext<AntiFraudDbContext>(options =>
+        {
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(30),
+                    errorNumbersToAdd: null));
+        });
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+        // Configure Kafka
+        builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
+        builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
+        builder.Services.AddHostedService<KafkaConsumerHostedService>();
+
+        // Add CORS to allow requests from any origin
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAll", builder =>
+            {
+                builder.AllowAnyOrigin()
+                       .AllowAnyMethod()
+                       .AllowAnyHeader();
+            });
+        });
+
+        // Add Health Checks
+        builder.Services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy());
+
+        var app = builder.Build();
+
+        // Configure the HTTP request pipeline.
+        app.UseSwagger();
+        app.UseSwaggerUI();
+
+        app.UseRouting();
+        
+        // Enable CORS
+        app.UseCors("AllowAll");
+
+        app.UseAuthorization();
+
+        app.MapControllers();
+
+        // Add health check endpoint
+        app.MapHealthChecks("/healthz", new HealthCheckOptions
+        {
+            Predicate = _ => true,
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("{\"status\": \"ok\"}");
+            }
+        });
+
+        // Ensure database is created
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AntiFraudDbContext>();
+            try
+            {
+                dbContext.Database.EnsureCreated();
+                Console.WriteLine("Database created or verified successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating database: {ex.Message}");
+            }
+        }
+
+        app.Run();
+    }
 }
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<AntiFraudDbContext>();
-    dbContext.Database.EnsureCreated();
-}
-
-app.Run();

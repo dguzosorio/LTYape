@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Domain.Entities;
-using AntiFraudService.Domain.Enums;
 
 namespace AntiFraudService.Infrastructure.Persistence
 {
@@ -48,25 +47,6 @@ namespace AntiFraudService.Infrastructure.Persistence
 
                 entity.Property(e => e.ValidationDate)
                     .IsRequired();
-
-                entity.Property(e => e.Result)
-                    .IsRequired()
-                    .HasConversion(
-                        v => v.ToString(),
-                        v => (ValidationResult)Enum.Parse(typeof(ValidationResult), v));
-
-                entity.Property(e => e.RejectionReason)
-                    .HasConversion(
-                        v => v.ToString(),
-                        v => (RejectionReason)Enum.Parse(typeof(RejectionReason), v));
-
-                entity.Property(e => e.Notes)
-                    .HasMaxLength(500);
-
-                entity.HasIndex(e => e.TransactionExternalId)
-                    .IsUnique();
-
-                entity.HasIndex(e => new { e.SourceAccountId, e.ValidationDate });
             });
         }
     }

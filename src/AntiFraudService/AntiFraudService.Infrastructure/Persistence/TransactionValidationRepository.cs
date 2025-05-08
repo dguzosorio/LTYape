@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace AntiFraudService.Infrastructure.Persistence
 {
@@ -13,14 +14,19 @@ namespace AntiFraudService.Infrastructure.Persistence
     public class TransactionValidationRepository : ITransactionValidationRepository
     {
         private readonly AntiFraudDbContext _dbContext;
+        private readonly ILogger<TransactionValidationRepository> _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TransactionValidationRepository"/> class
         /// </summary>
         /// <param name="dbContext">The database context</param>
-        public TransactionValidationRepository(AntiFraudDbContext dbContext)
+        /// <param name="logger">The logger</param>
+        public TransactionValidationRepository(
+            AntiFraudDbContext dbContext,
+            ILogger<TransactionValidationRepository> logger)
         {
             _dbContext = dbContext;
+            _logger = logger;
         }
 
         /// <summary>
@@ -40,8 +46,34 @@ namespace AntiFraudService.Infrastructure.Persistence
         /// <param name="validation">The transaction validation to add</param>
         public async Task AddAsync(TransactionValidation validation)
         {
-            await _dbContext.TransactionValidations.AddAsync(validation);
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                // Check if the transaction already exists to avoid duplicates
+                var existingValidation = await GetByTransactionExternalIdAsync(validation.TransactionExternalId);
+                
+                if (existingValidation != null)
+                {
+                    _logger.LogWarning(
+                        "Received duplicate validation attempt for transaction {TransactionId}. This validation will be ignored.",
+                        validation.TransactionExternalId);
+                    return; // Do nothing if validation already exists
+                }
+                
+                await _dbContext.TransactionValidations.AddAsync(validation);
+                await _dbContext.SaveChangesAsync();
+                
+                _logger.LogInformation(
+                    "Transaction validation {TransactionId} successfully stored with result {Result}",
+                    validation.TransactionExternalId, validation.Result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error saving transaction validation {TransactionId}: {ErrorMessage}",
+                    validation.TransactionExternalId, ex.Message);
+                throw;
+            }
         }
 
         /// <summary>
