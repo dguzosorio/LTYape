@@ -1,7 +1,10 @@
 version: "3.7"
+
 services:
+  # Base de datos SQL Server
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: sqlserver
     ports:
       - "1433:1433"
     environment:
@@ -10,67 +13,114 @@ services:
     volumes:
       - sqlserver_data:/var/opt/mssql
     networks:
-      - ltape-network
+      - yape-network
+    restart: always
 
+  # Infraestructura Kafka
   zookeeper:
     image: confluentinc/cp-zookeeper:5.5.3
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
     networks:
-      - ltape-network
+      - yape-network
 
   kafka:
     image: confluentinc/cp-enterprise-kafka:5.5.3
-    depends_on: [zookeeper]
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_BROKER_ID: 1
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_MS: 86400000
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
       KAFKA_JMX_PORT: 9991
-    ports:
-      - 9092:9092
+      # Define topics that will be created automatically
+      KAFKA_CREATE_TOPICS: "transaction-validation-request:1:1,transaction-validation-response:1:1"
     networks:
-      - ltape-network
+      - yape-network
 
+  # Service to verify that topics are created
+  init-kafka:
+    image: confluentinc/cp-enterprise-kafka:5.5.3
+    container_name: init-kafka
+    depends_on:
+      - kafka
+    command: >
+      bash -c '
+      echo "Waiting for Kafka to be available..."
+      cub kafka-ready -b kafka:9092 1 180 &&
+      echo "Creating topics..." &&
+      kafka-topics --bootstrap-server kafka:9092 --create --topic transaction-validation-request --partitions 1 --replication-factor 1 || true &&
+      kafka-topics --bootstrap-server kafka:9092 --create --topic transaction-validation-response --partitions 1 --replication-factor 1 || true &&
+      echo "Available topics:" &&
+      kafka-topics --bootstrap-server kafka:9092 --list
+      '
+    networks:
+      - yape-network
+
+  # Transaction API
   transaction-service:
     build:
       context: ./src/TransactionService
-      dockerfile: TransactionService.API/Dockerfile
+      dockerfile: Dockerfile
+    container_name: transaction-service
+    depends_on:
+      - kafka
+      - sqlserver
+      - init-kafka
     ports:
       - "5001:80"
-    depends_on:
-      - sqlserver
-      - kafka
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TransactionDb;User Id=sa;Password=Pass@word1;TrustServerCertificate=True;
-      - Kafka__BootstrapServers=kafka:29092
+      - Kafka__BootstrapServers=kafka:9092
       - Kafka__GroupId=transaction-service
+      - Kafka__Topics__TransactionValidationRequest=transaction-validation-request
+      - Kafka__Topics__TransactionValidationResponse=transaction-validation-response
     networks:
-      - ltape-network
+      - yape-network
+    restart: on-failure
 
+  # Anti-Fraud API
   antifraud-service:
     build:
       context: ./src/AntiFraudService
-      dockerfile: AntiFraudService.API/Dockerfile
+      dockerfile: Dockerfile
+    container_name: antifraud-service
+    depends_on:
+      - kafka
+      - sqlserver
+      - init-kafka
     ports:
       - "5002:80"
-    depends_on:
-      - sqlserver
-      - kafka
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AntiFraudDb;User Id=sa;Password=Pass@word1;TrustServerCertificate=True;
-      - Kafka__BootstrapServers=kafka:29092
+      - Kafka__BootstrapServers=kafka:9092
       - Kafka__GroupId=antifraud-service
+      - Kafka__Topics__TransactionValidationRequest=transaction-validation-request
+      - Kafka__Topics__TransactionValidationResponse=transaction-validation-response
     networks:
-      - ltape-network
-
-volumes:
-  sqlserver_data:
+      - yape-network
+    restart: on-failure
 
 networks:
-  ltape-network:
-    driver: bridge 
+  yape-network:
+    driver: bridge
+
+volumes:
+  sqlserver_data: 

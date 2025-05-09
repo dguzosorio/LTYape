@@ -1,127 +1,234 @@
-# Sistema Anti-Fraude para Transacciones Financieras
+# LTYape Microservices
 
-Este proyecto implementa un sistema anti-fraude para transacciones financieras utilizando una arquitectura hexagonal (Puertos y Adaptadores) con dos microservicios principales:
+Microservices-based application for processing financial transactions with fraud validation capabilities.
 
-1. **TransactionService**: Servicio para crear y consultar transacciones financieras.
-2. **AntiFraudService**: Servicio para validar transacciones según reglas anti-fraude.
+## Architecture
 
-## Arquitectura del Sistema
+This solution consists of two main microservices:
 
-El sistema sigue una arquitectura hexagonal (puertos y adaptadores) que separa las capas de:
+1. **Transaction Service**: Handles transaction creation and management
+2. **Anti-Fraud Service**: Validates transactions against fraud rules
 
-- **Dominio**: Contiene la lógica de negocio y las entidades.
-- **Aplicación**: Contiene los casos de uso y la orquestación de la lógica de negocio.
-- **Infraestructura**: Implementa los adaptadores para comunicarse con servicios externos.
-- **API**: Expone los endpoints HTTP para interactuar con el sistema.
+The services communicate through Kafka messaging for asynchronous processing. Each service has its own database for storing domain-specific data.
 
-### Diagrama de Arquitectura
+### Architecture Diagram
 
 ```
-                ┌───────────────────┐      ┌───────────────────┐
-                │  TransactionService│      │  AntiFraudService │
-                └─────────┬─────────┘      └─────────┬─────────┘
-                          │                          │
-                          ▼                          ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│           API Layer                 │   │           API Layer             │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│        Application Layer            │   │        Application Layer        │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│         Domain Layer                │   │         Domain Layer            │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────────────────┐   ┌─────────────────────────────────┐
-│      Infrastructure Layer           │   │      Infrastructure Layer       │
-└─────────────┬───────────────────────┘   └───────────────┬─────────────────┘
-              │                                           │
-              ▼                                           ▼
-      ┌───────────────┐                          ┌───────────────┐
-      │  SQL Server   │◄────────────────────────►│    Kafka      │
-      └───────────────┘                          └───────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Clients / Frontend                            │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                                                                           │
+│  ┌────────────────────────────┐              ┌────────────────────────┐   │
+│  │                            │              │                        │   │
+│  │     TransactionService     │◄────────────►│    AntiFraudService    │   │
+│  │                            │     Kafka    │                        │   │
+│  └─────────────┬──────────────┘              └────────────┬───────────┘   │
+│                │                                          │               │
+│                │                                          │               │
+│                │                                          │               │
+│                ▼                                          ▼               │
+│   ┌─────────────────────────┐                ┌─────────────────────────┐  │
+│   │                         │                │                         │  │
+│   │       SQL Server        │◄──────────────►│       SQL Server        │  │
+│   │  (TransactionDB)        │                │    (AntiFraudDB)        │  │
+│   │                         │                │                         │  │
+│   └─────────────────────────┘                └─────────────────────────┘  │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Flujo de Comunicación
+### Communication Flow
 
-1. **TransactionService** recibe una solicitud para crear una transacción.
-2. La transacción se guarda en estado "pending" en la base de datos.
-3. Un mensaje se envía a través de Kafka para que sea validado por **AntiFraudService**.
-4. **AntiFraudService** recibe el mensaje, valida la transacción según las reglas anti-fraude.
-5. **AntiFraudService** envía un mensaje de respuesta a través de Kafka.
-6. **TransactionService** recibe la respuesta y actualiza el estado de la transacción a "approved" o "rejected".
+1. **Transaction Service** receives a request to create a transaction.
+2. The transaction is saved in "pending" state in the database (SQL Server).
+3. A message is sent through Kafka to be validated by **Anti-Fraud Service**.
+4. **Anti-Fraud Service** receives the message, queries historical information in SQL Server, and validates the transaction according to fraud rules.
+5. **Anti-Fraud Service** sends a response message through Kafka.
+6. **Transaction Service** receives the response and updates the transaction state to "approved" or "rejected" in SQL Server.
 
-## Reglas de Validación
+## Validation Rules
 
-Las transacciones se rechazan cuando:
-- El valor de la transacción es mayor a 2000.
-- El acumulado por día es mayor a 20000.
+Transactions are rejected when:
+- The transaction value is greater than 2000.
+- The daily accumulated amount is greater than 20000.
 
-## Tecnologías Utilizadas
+## Services URLs
 
-- **.NET 8**: Framework para el desarrollo de aplicaciones.
-- **SQL Server**: Base de datos relacional.
-- **Kafka**: Sistema de mensajería para la comunicación entre microservicios.
-- **Docker/Docker Compose**: Para la contenerización y orquestación de los servicios.
+When running with Docker Compose, the services are available at:
 
-## Cómo Ejecutar el Proyecto
+- **Transaction Service**: http://localhost:5001
+- **Anti-Fraud Service**: http://localhost:5002
 
-### Requisitos Previos
+## API Endpoints
 
-- Docker y Docker Compose instalados.
-- .NET 8 SDK para desarrollo local.
+### Transaction Service
 
-### Pasos para Ejecutar
+#### Create Transaction
+- **URL**: `POST http://localhost:5001/api/transactions`
+- **Description**: Creates a new financial transaction
+- **Request Body**: JSON with transaction details
+- **Response**: Transaction details with a 201 Created status
 
-1. Clonar el repositorio:
+#### Get Transaction
+- **URL**: `GET http://localhost:5001/api/transactions/{transactionExternalId}`
+- **Description**: Retrieves details of a specific transaction
+- **Response**: Transaction details with a 200 OK status or 404 Not Found
+
+### Anti-Fraud Service
+
+#### Validate Transaction (Manual validation)
+- **URL**: `POST http://localhost:5002/api/antifraud/validate`
+- **Description**: Manually validates a transaction (for testing purposes)
+- **Request Body**: JSON with transaction details
+- **Response**: 204 No Content if successful
+
+## Transaction Examples
+
+### Example 1: Standard Transaction (Small Amount)
+```json
+{
+  "sourceAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "targetAccountId": "4ee0950e-7ee6-4542-9930-6bc6e7a2ce8c",
+  "transferTypeId": 1,
+  "value": 100.00
+}
+```
+
+### Example 2: Large Amount Transaction (Will be rejected)
+```json
+{
+  "sourceAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "targetAccountId": "4ee0950e-7ee6-4542-9930-6bc6e7a2ce8c",
+  "transferTypeId": 1,
+  "value": 12000.00
+}
+```
+
+### Example 3: Multiple Transactions (To test daily limit)
+```json
+{
+  "sourceAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "targetAccountId": "4ee0950e-7ee6-4542-9930-6bc6e7a2ce8c",
+  "transferTypeId": 1,
+  "value": 3000.00
+}
+```
+
+### Example 4: ATM Withdrawal
+```json
+{
+  "sourceAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "targetAccountId": "4ee0950e-7ee6-4542-9930-6bc6e7a2ce8c",
+  "transferTypeId": 2,
+  "value": 200.00
+}
+```
+
+### Example 5: International Transfer
+```json
+{
+  "sourceAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "targetAccountId": "4ee0950e-7ee6-4542-9930-6bc6e7a2ce8c",
+  "transferTypeId": 3,
+  "value": 500.00
+}
+```
+
+## Transfer Types
+
+The `transferTypeId` field specifies the type of transfer:
+
+- `1`: Standard bank transfer
+- `2`: ATM withdrawal
+- `3`: International transfer
+
+## Local Development with Docker
+
+### Prerequisites
+
+- Docker and Docker Compose
+- .NET 8 SDK (for local development outside Docker)
+
+### Running the Application
+
+1. Build and start the containers:
    ```
-   git clone <repo-url>
-   cd LTYape
+   docker-compose up -d --build
    ```
 
-2. Iniciar los servicios con Docker Compose:
+2. The services will be available at:
+   - Transaction Service: http://localhost:5001
+   - Anti-Fraud Service: http://localhost:5002
+   - Swagger UI: http://localhost:5001/swagger and http://localhost:5002/swagger
+
+3. Stop the application:
    ```
-   docker-compose up -d
+   docker-compose down
    ```
 
-3. Acceder a los endpoints:
-   - TransactionService: http://localhost:5001
-   - AntiFraudService: http://localhost:5002
+## Database Connection
 
-## Endpoints Disponibles
+### SQL Server Details
+- **Server**: localhost,1433
+- **User**: sa
+- **Password**: Pass@word1
+- **Databases**: 
+  - Transaction Service: TransactionDb
+  - Anti-Fraud Service: AntiFraudDb
 
-### TransactionService
+### Using SQL Server Management Studio
+1. Connect using the following settings:
+   - Server type: Database Engine
+   - Server name: localhost,1433
+   - Authentication: SQL Server Authentication
+   - Login: sa
+   - Password: Pass@word1
 
-- **POST /api/transactions**: Crear una nueva transacción.
-  ```json
-  {
-    "sourceAccountId": "Guid",
-    "targetAccountId": "Guid",
-    "tranferTypeId": 1,
-    "value": 120
-  }
-  ```
+## Technologies
 
-- **GET /api/transactions/{transactionExternalId}**: Obtener una transacción por su ID externo.
+- **.NET 8**: Framework for application development
+- **SQL Server**: Relational database
+- **Kafka**: Messaging system for microservices communication
+- **Docker/Docker Compose**: For containerization and service orchestration
 
-### AntiFraudService
+## Recent Improvements
 
-- Servicios internos para validación de fraude (no expuestos directamente).
+1. **Error Handling**:
+   - Fixed duplicate key issues in the Anti-Fraud service by checking for existing transactions
+   - Added improved error handling in controllers with specific error responses
 
-## Desarrollo Local
+2. **Configuration**:
+   - Updated Kafka settings to use port 9092 for better compatibility
+   - Streamlined Docker configuration
 
-Para desarrollar localmente fuera de Docker:
+3. **Code Quality**:
+   - Removed unused code and Bruno testing files
+   - Translated log messages to English for consistency
+   - Added CORS support for cross-origin requests
 
-1. Configurar las variables de entorno apropiadas para apuntar a los servicios en contenedores.
-2. Ejecutar los proyectos API con `dotnet run`.
+4. **Documentation**:
+   - Added this comprehensive README with examples and setup instructions
+   - Updated code comments for better maintainability
 
-## Estrategia de Testing
+## Troubleshooting
 
-- **Unit Tests**: Para validar la lógica de negocio.
-- **Integration Tests**: Para validar la interacción entre componentes.
-- **E2E Tests**: Para validar el comportamiento completo del sistema. 
+### Kafka Connection Issues
+If you encounter issues connecting to Kafka, check:
+1. Ensure the Kafka container is running: `docker ps | grep kafka`
+2. Verify the Kafka topics were created: `docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 --list`
+
+### Database Issues
+1. Ensure the SQL Server container is running: `docker ps | grep sqlserver`
+2. Check the logs for database errors: `docker logs sqlserver`
+
+## Project Structure
+
+The solution follows a clean architecture approach:
+
+- **API Layer**: Controllers and configuration
+- **Application Layer**: Application services and DTOs
+- **Domain Layer**: Entities, repositories interfaces, and domain services
+- **Infrastructure Layer**: Implementations of repositories, external services, and database contexts 
