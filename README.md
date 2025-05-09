@@ -73,8 +73,15 @@ When running with Docker Compose, the services are available at:
 - **Response**: Transaction details with a 201 Created status
 
 #### Get Transaction
-- **URL**: `GET http://localhost:5001/api/transactions/{transactionExternalId}`
+- **URL**: `GET http://localhost:5001/api/transactions`
 - **Description**: Retrieves details of a specific transaction
+- **Request Body**: 
+```json
+{
+    "transactionExternalId": "00000000-0000-0000-0000-000000000000",
+    "createdAt": "2024-03-21T10:00:00Z"  // opcional
+}
+```
 - **Response**: Transaction details with a 200 OK status or 404 Not Found
 
 ### Anti-Fraud Service
@@ -194,24 +201,7 @@ The `transferTypeId` field specifies the type of transfer:
 - **Kafka**: Messaging system for microservices communication
 - **Docker/Docker Compose**: For containerization and service orchestration
 
-## Recent Improvements
 
-1. **Error Handling**:
-   - Fixed duplicate key issues in the Anti-Fraud service by checking for existing transactions
-   - Added improved error handling in controllers with specific error responses
-
-2. **Configuration**:
-   - Updated Kafka settings to use port 9092 for better compatibility
-   - Streamlined Docker configuration
-
-3. **Code Quality**:
-   - Removed unused code and Bruno testing files
-   - Translated log messages to English for consistency
-   - Added CORS support for cross-origin requests
-
-4. **Documentation**:
-   - Added this comprehensive README with examples and setup instructions
-   - Updated code comments for better maintainability
 
 ## Troubleshooting
 

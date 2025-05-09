@@ -27,7 +27,15 @@ namespace TransactionService.Domain.Services
         /// </summary>
         /// <param name="externalId">The external identifier of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
-        Task<Transaction> GetTransactionByExternalIdAsync(Guid externalId);
+        Task<Transaction?> GetTransactionByExternalIdAsync(Guid externalId);
+
+        /// <summary>
+        /// Retrieves a transaction by its external identifier and creation date
+        /// </summary>
+        /// <param name="externalId">The external identifier of the transaction</param>
+        /// <param name="createdAt">The creation date of the transaction</param>
+        /// <returns>The transaction if found, or null if not found</returns>
+        Task<Transaction?> GetTransactionByExternalIdAndDateAsync(Guid externalId, DateTime createdAt);
         
         /// <summary>
         /// Updates the status of a transaction

@@ -54,9 +54,11 @@ namespace TransactionService.Infrastructure.Persistence
 
                 entity.Property(e => e.Status)
                     .IsRequired()
-                    .HasConversion(
-                        v => v.ToString(),
-                        v => (TransactionStatus)Enum.Parse(typeof(TransactionStatus), v));
+                    .HasConversion<string>();
+
+                entity.Property(e => e.Notes)
+                    .IsRequired(false)
+                    .HasMaxLength(500);
 
                 entity.Property(e => e.CreatedAt)
                     .IsRequired();

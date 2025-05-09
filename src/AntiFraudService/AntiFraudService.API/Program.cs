@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using AntiFraudService.Application.Services;
 using AntiFraudService.Domain.Repositories;
 using AntiFraudService.Domain.Services;

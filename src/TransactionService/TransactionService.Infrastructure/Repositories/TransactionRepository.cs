@@ -29,10 +29,9 @@ namespace TransactionService.Infrastructure.Repositories
         /// </summary>
         /// <param name="id">The internal ID of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
-        public async Task<Transaction> GetByIdAsync(int id)
+        public async Task<Transaction?> GetByIdAsync(int id)
         {
-            return await _dbContext.Transactions
-                .FirstOrDefaultAsync(t => t.Id == id);
+            return await _dbContext.Transactions.FindAsync(id);
         }
 
         /// <summary>
@@ -40,10 +39,24 @@ namespace TransactionService.Infrastructure.Repositories
         /// </summary>
         /// <param name="externalId">The external ID of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
-        public async Task<Transaction> GetByExternalIdAsync(Guid externalId)
+        public async Task<Transaction?> GetByExternalIdAsync(Guid externalId)
         {
             return await _dbContext.Transactions
                 .FirstOrDefaultAsync(t => t.TransactionExternalId == externalId);
+        }
+
+        /// <summary>
+        /// Retrieves a transaction by its external identifier and creation date
+        /// </summary>
+        /// <param name="externalId">The external ID of the transaction</param>
+        /// <param name="createdAt">The creation date of the transaction</param>
+        /// <returns>The transaction if found, or null if not found</returns>
+        public async Task<Transaction?> GetByExternalIdAndDateAsync(Guid externalId, DateTime createdAt)
+        {
+            return await _dbContext.Transactions
+                .FirstOrDefaultAsync(t => 
+                    t.TransactionExternalId == externalId && 
+                    t.CreatedAt.Date == createdAt.Date);
         }
 
         /// <summary>

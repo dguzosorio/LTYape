@@ -41,34 +41,21 @@ namespace TransactionService.Infrastructure.Services
         /// <returns>A task representing the asynchronous operation</returns>
         public async Task SendTransactionForValidationAsync(Transaction transaction)
         {
-            try
+            var topic = _configuration["Kafka:Topics:TransactionValidationRequest"];
+            if (string.IsNullOrEmpty(topic))
+                throw new InvalidOperationException("Transaction validation request topic is not configured");
+
+            var message = new TransactionValidationRequestMessage
             {
-                var topic = _configuration["Kafka:Topics:TransactionValidationRequest"];
-                
-                var message = MapTransactionToMessage(transaction);
-                
-                _logger.LogInformation(
-                    "Sending transaction {TransactionId} for validation", 
-                    transaction.TransactionExternalId);
-                
-                await _kafkaProducer.ProduceAsync(
-                    topic,
-                    transaction.TransactionExternalId.ToString(),
-                    message);
-                
-                _logger.LogInformation(
-                    "Transaction {TransactionId} sent for validation", 
-                    transaction.TransactionExternalId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error sending transaction {TransactionId} for validation",
-                    transaction.TransactionExternalId);
-                
-                throw;
-            }
+                TransactionExternalId = transaction.TransactionExternalId,
+                SourceAccountId = transaction.SourceAccountId,
+                TargetAccountId = transaction.TargetAccountId,
+                TransferTypeId = transaction.TransferTypeId,
+                Value = transaction.Value,
+                CreatedAt = transaction.CreatedAt
+            };
+
+            await _kafkaProducer.ProduceAsync(topic, transaction.TransactionExternalId.ToString(), message);
         }
         
         private TransactionValidationRequestMessage MapTransactionToMessage(Transaction transaction)

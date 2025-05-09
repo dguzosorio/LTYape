@@ -46,7 +46,7 @@ namespace AntiFraudService.Domain.Entities
         /// <summary>
         /// Additional details or notes about the validation
         /// </summary>
-        public string Notes { get; private set; }
+        public string? Notes { get; private set; }
 
         // For EF Core
         private TransactionValidation() { }
@@ -66,7 +66,7 @@ namespace AntiFraudService.Domain.Entities
             decimal transactionAmount,
             ValidationResult result,
             RejectionReason rejectionReason = RejectionReason.None,
-            string notes = null)
+            string? notes = null)
         {
             TransactionExternalId = transactionExternalId;
             SourceAccountId = sourceAccountId;
@@ -114,7 +114,7 @@ namespace AntiFraudService.Domain.Entities
             Guid sourceAccountId,
             decimal transactionAmount,
             RejectionReason reason,
-            string notes = null)
+            string? notes = null)
         {
             return new TransactionValidation(
                 transactionExternalId,

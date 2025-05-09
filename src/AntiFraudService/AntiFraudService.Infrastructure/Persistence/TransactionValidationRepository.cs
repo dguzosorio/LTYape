@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Repositories;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
 
 namespace AntiFraudService.Infrastructure.Persistence
 {
@@ -30,14 +31,32 @@ namespace AntiFraudService.Infrastructure.Persistence
         }
 
         /// <summary>
+        /// Retrieves a transaction validation by its external identifier
+        /// </summary>
+        /// <param name="externalId">The external ID of the transaction</param>
+        /// <returns>The transaction validation if found, or null if not found</returns>
+        public async Task<TransactionValidation?> GetByExternalIdAsync(Guid externalId)
+        {
+            return await _dbContext.TransactionValidations
+                .FirstOrDefaultAsync(v => v.TransactionExternalId == externalId);
+        }
+
+        /// <summary>
         /// Retrieves a transaction validation by the transaction's external identifier
         /// </summary>
         /// <param name="transactionExternalId">The external ID of the transaction</param>
         /// <returns>The transaction validation if found, or null if not found</returns>
         public async Task<TransactionValidation> GetByTransactionExternalIdAsync(Guid transactionExternalId)
         {
-            return await _dbContext.TransactionValidations
-                .FirstOrDefaultAsync(t => t.TransactionExternalId == transactionExternalId);
+            var validation = await _dbContext.TransactionValidations
+                .FirstOrDefaultAsync(v => v.TransactionExternalId == transactionExternalId);
+                
+            if (validation == null)
+            {
+                throw new KeyNotFoundException($"No se encontró la validación para la transacción {transactionExternalId}");
+            }
+            
+            return validation;
         }
 
         /// <summary>
@@ -49,7 +68,7 @@ namespace AntiFraudService.Infrastructure.Persistence
             try
             {
                 // Check if the transaction already exists to avoid duplicates
-                var existingValidation = await GetByTransactionExternalIdAsync(validation.TransactionExternalId);
+                var existingValidation = await GetByExternalIdAsync(validation.TransactionExternalId);
                 
                 if (existingValidation != null)
                 {

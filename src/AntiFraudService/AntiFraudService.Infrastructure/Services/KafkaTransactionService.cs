@@ -106,34 +106,24 @@ namespace AntiFraudService.Infrastructure.Services
         /// <returns>A task representing the asynchronous operation</returns>
         public async Task SendValidationResultAsync(TransactionValidation validation)
         {
-            try
-            {
-                var topic = _configuration["Kafka:Topics:TransactionValidationResponse"];
-                
-                var message = MapValidationToMessage(validation);
-                
-                _logger.LogInformation(
-                    "Sending validation result for transaction {TransactionId}",
-                    validation.TransactionExternalId);
-                
-                await _kafkaProducer.ProduceAsync(
-                    topic,
-                    validation.TransactionExternalId.ToString(),
-                    message);
-                
-                _logger.LogInformation(
-                    "Validation result for transaction {TransactionId} sent",
-                    validation.TransactionExternalId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error sending validation result for transaction {TransactionId}",
-                    validation.TransactionExternalId);
-                
-                throw;
-            }
+            var topic = _configuration["Kafka:Topics:TransactionValidationResponse"];
+            if (string.IsNullOrEmpty(topic))
+                throw new InvalidOperationException("Transaction validation response topic is not configured");
+
+            var message = MapValidationToMessage(validation);
+            
+            _logger.LogInformation(
+                "Sending validation result for transaction {TransactionId}",
+                validation.TransactionExternalId);
+            
+            await _kafkaProducer.ProduceAsync(
+                topic,
+                validation.TransactionExternalId.ToString(),
+                message);
+            
+            _logger.LogInformation(
+                "Validation result for transaction {TransactionId} sent",
+                validation.TransactionExternalId);
         }
         
         private TransactionValidationResponseMessage MapValidationToMessage(TransactionValidation validation)

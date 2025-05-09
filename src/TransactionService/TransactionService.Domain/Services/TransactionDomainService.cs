@@ -22,11 +22,8 @@ namespace TransactionService.Domain.Services
         /// <param name="antiFraudService">The anti-fraud service</param>
         public TransactionDomainService(
             ITransactionRepository transactionRepository,
-            IAntiFraudService antiFraudService)
-        {
-            _transactionRepository = transactionRepository;
-            _antiFraudService = antiFraudService;
-        }
+            IAntiFraudService antiFraudService) => 
+            (_transactionRepository, _antiFraudService) = (transactionRepository, antiFraudService);
 
         /// <summary>
         /// Creates a new transaction with the specified details
@@ -42,11 +39,14 @@ namespace TransactionService.Domain.Services
             if (value <= 0)
                 throw new TransactionDomainException("Transaction value must be greater than zero");
 
-            var transaction = new Transaction(sourceAccountId, targetAccountId, transferTypeId, value);
+            var transaction = new Transaction(
+                Guid.NewGuid(),
+                sourceAccountId,
+                targetAccountId,
+                transferTypeId,
+                value);
             
             await _transactionRepository.AddAsync(transaction);
-            
-            // Send the transaction for fraud validation
             await _antiFraudService.SendTransactionForValidationAsync(transaction);
             
             return transaction;
@@ -57,10 +57,17 @@ namespace TransactionService.Domain.Services
         /// </summary>
         /// <param name="externalId">The external identifier of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
-        public async Task<Transaction> GetTransactionByExternalIdAsync(Guid externalId)
-        {
-            return await _transactionRepository.GetByExternalIdAsync(externalId);
-        }
+        public async Task<Transaction?> GetTransactionByExternalIdAsync(Guid externalId) =>
+            await _transactionRepository.GetByExternalIdAndDateAsync(externalId, DateTime.UtcNow);
+
+        /// <summary>
+        /// Retrieves a transaction by its external identifier and creation date
+        /// </summary>
+        /// <param name="externalId">The external identifier of the transaction</param>
+        /// <param name="createdAt">The creation date of the transaction</param>
+        /// <returns>The transaction if found, or null if not found</returns>
+        public async Task<Transaction?> GetTransactionByExternalIdAndDateAsync(Guid externalId, DateTime createdAt) =>
+            await _transactionRepository.GetByExternalIdAndDateAsync(externalId, createdAt);
 
         /// <summary>
         /// Updates the status of a transaction

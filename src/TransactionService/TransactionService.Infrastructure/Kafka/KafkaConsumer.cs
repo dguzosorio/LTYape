@@ -41,6 +41,11 @@ namespace TransactionService.Infrastructure.Kafka
         /// <returns>A disposable subscription</returns>
         public IDisposable Subscribe<TKey, TValue>(string topic, Action<TKey, TValue> handler)
         {
+            if (string.IsNullOrEmpty(topic))
+                throw new ArgumentNullException(nameof(topic));
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
             var config = new ConsumerConfig
             {
                 BootstrapServers = _configuration["Kafka:BootstrapServers"],
@@ -80,7 +85,7 @@ namespace TransactionService.Infrastructure.Kafka
                     try
                     {
                         var consumeResult = consumer.Consume(cancellationToken);
-                        if (consumeResult != null)
+                        if (consumeResult?.Message?.Key != null && consumeResult.Message.Value != null)
                         {
                             var key = typeof(TKey) == typeof(string) 
                                 ? (TKey)(object)consumeResult.Message.Key 
@@ -92,12 +97,19 @@ namespace TransactionService.Infrastructure.Kafka
                                 { 
                                     PropertyNameCaseInsensitive = true 
                                 });
-                            
-                            handler(key, value);
-                            
-                            _logger.LogInformation(
-                                "Consumed message from {Topic} - Partition: {Partition}, Offset: {Offset}",
-                                consumeResult.Topic, consumeResult.Partition, consumeResult.Offset);
+
+                            if (key != null && value != null)
+                            {
+                                handler(key, value);
+                                
+                                _logger.LogInformation(
+                                    "Consumed message from {Topic} - Partition: {Partition}, Offset: {Offset}",
+                                    consumeResult.Topic, consumeResult.Partition, consumeResult.Offset);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Deserialized message key or value is null");
+                            }
                         }
                     }
                     catch (ConsumeException ex)

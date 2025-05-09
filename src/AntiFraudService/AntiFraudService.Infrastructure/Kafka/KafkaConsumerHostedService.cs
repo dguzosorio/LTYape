@@ -20,7 +20,7 @@ namespace AntiFraudService.Infrastructure.Kafka
         private readonly IKafkaConsumer _kafkaConsumer;
         private readonly IConfiguration _configuration;
         private readonly ILogger<KafkaConsumerHostedService> _logger;
-        private IDisposable _subscription;
+        private IDisposable? _subscription;
         
         /// <summary>
         /// Initializes a new instance of the <see cref="KafkaConsumerHostedService"/> class

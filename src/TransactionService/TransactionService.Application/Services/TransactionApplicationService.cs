@@ -38,14 +38,16 @@ namespace TransactionService.Application.Services
         }
 
         /// <summary>
-        /// Retrieves transaction information by its external identifier
+        /// Retrieves transaction information by its external identifier and creation date
         /// </summary>
-        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <param name="request">The transaction retrieval request</param>
         /// <returns>The transaction information if found, or null if not found</returns>
-        public async Task<TransactionResponse> GetTransactionAsync(Guid transactionExternalId)
+        public async Task<TransactionResponse?> GetTransactionAsync(GetTransactionRequest request)
         {
-            var transaction = await _transactionDomainService.GetTransactionByExternalIdAsync(transactionExternalId);
-            
+            var transaction = await _transactionDomainService.GetTransactionByExternalIdAndDateAsync(
+                request.TransactionExternalId,
+                request.CreatedAt ?? DateTime.UtcNow);
+
             if (transaction == null)
                 return null;
 

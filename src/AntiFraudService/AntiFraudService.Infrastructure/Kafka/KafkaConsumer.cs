@@ -93,11 +93,18 @@ namespace AntiFraudService.Infrastructure.Kafka
                                     PropertyNameCaseInsensitive = true 
                                 });
                             
-                            handler(key, value);
-                            
-                            _logger.LogInformation(
-                                "Consumed message from {Topic} - Partition: {Partition}, Offset: {Offset}",
-                                consumeResult.Topic, consumeResult.Partition, consumeResult.Offset);
+                            if (key != null && value != null)
+                            {
+                                handler(key, value);
+                                
+                                _logger.LogInformation(
+                                    "Consumed message from {Topic} - Partition: {Partition}, Offset: {Offset}",
+                                    consumeResult.Topic, consumeResult.Partition, consumeResult.Offset);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Deserialized message key or value is null");
+                            }
                         }
                     }
                     catch (ConsumeException ex)

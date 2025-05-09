@@ -44,9 +44,9 @@ namespace TransactionService.Domain.Entities
         public TransactionStatus Status { get; private set; }
         
         /// <summary>
-        /// Additional notes or comments about the transaction
+        /// Additional details or notes about the transaction
         /// </summary>
-        public string Notes { get; private set; }
+        public string? Notes { get; private set; }
         
         /// <summary>
         /// Date and time when the transaction was created
@@ -64,20 +64,28 @@ namespace TransactionService.Domain.Entities
         /// <summary>
         /// Creates a new transaction with the specified details
         /// </summary>
+        /// <param name="transactionExternalId">External identifier of the transaction</param>
         /// <param name="sourceAccountId">Identifier of the source account</param>
         /// <param name="targetAccountId">Identifier of the target account</param>
-        /// <param name="transferTypeId">Type of transfer</param>
+        /// <param name="transferTypeId">Identifier of the transfer type</param>
         /// <param name="value">Monetary value of the transaction</param>
-        public Transaction(Guid sourceAccountId, Guid targetAccountId, int transferTypeId, decimal value)
+        /// <param name="notes">Additional details or notes</param>
+        public Transaction(
+            Guid transactionExternalId,
+            Guid sourceAccountId,
+            Guid targetAccountId,
+            int transferTypeId,
+            decimal value,
+            string? notes = null)
         {
-            TransactionExternalId = Guid.NewGuid();
+            TransactionExternalId = transactionExternalId;
             SourceAccountId = sourceAccountId;
             TargetAccountId = targetAccountId;
             TransferTypeId = transferTypeId;
             Value = value;
             Status = TransactionStatus.Pending;
             CreatedAt = DateTime.UtcNow;
-            Notes = string.Empty;
+            Notes = notes ?? string.Empty;
         }
 
         /// <summary>
@@ -93,10 +101,10 @@ namespace TransactionService.Domain.Entities
         /// <summary>
         /// Updates the notes of the transaction
         /// </summary>
-        /// <param name="notes">The new notes to set</param>
-        public void UpdateNotes(string notes)
+        /// <param name="notes">New notes to set</param>
+        public void UpdateNotes(string? notes)
         {
-            Notes = notes ?? string.Empty;
+            Notes = notes;
             UpdatedAt = DateTime.UtcNow;
         }
 
@@ -112,7 +120,7 @@ namespace TransactionService.Domain.Entities
         /// Marks the transaction as rejected with optional notes
         /// </summary>
         /// <param name="notes">Optional notes explaining the rejection</param>
-        public void Reject(string notes = null)
+        public void Reject(string? notes = null)
         {
             UpdateStatus(TransactionStatus.Rejected);
             if (!string.IsNullOrEmpty(notes))

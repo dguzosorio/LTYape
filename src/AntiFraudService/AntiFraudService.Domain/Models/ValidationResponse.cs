@@ -26,7 +26,7 @@ namespace AntiFraudService.Domain.Models
         /// <summary>
         /// Additional details or notes about the validation
         /// </summary>
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
         
         /// <summary>
         /// Date and time when the validation response was created
@@ -66,14 +66,14 @@ namespace AntiFraudService.Domain.Models
         public static ValidationResponse CreateRejected(
             Guid transactionExternalId,
             RejectionReason reason,
-            string notes = null)
+            string? notes = null)
         {
             return new ValidationResponse
             {
                 TransactionExternalId = transactionExternalId,
                 Result = ValidationResult.Rejected,
                 RejectionReason = reason,
-                Notes = notes
+                Notes = notes ?? $"Transaction rejected: {reason}"
             };
         }
     }

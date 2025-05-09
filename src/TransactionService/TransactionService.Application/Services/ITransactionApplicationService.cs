@@ -17,10 +17,10 @@ namespace TransactionService.Application.Services
         Task<TransactionResponse> CreateTransactionAsync(CreateTransactionRequest request);
         
         /// <summary>
-        /// Retrieves transaction information by its external identifier
+        /// Retrieves transaction information by its external identifier and creation date
         /// </summary>
-        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <param name="request">The transaction retrieval request</param>
         /// <returns>The transaction information if found, or null if not found</returns>
-        Task<TransactionResponse> GetTransactionAsync(Guid transactionExternalId);
+        Task<TransactionResponse?> GetTransactionAsync(GetTransactionRequest request);
     }
 } 
