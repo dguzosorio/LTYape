@@ -44,23 +44,26 @@ namespace TransactionService.API.Controllers
             
             return CreatedAtAction(
                 nameof(GetTransaction),
-                new { transactionExternalId = transaction.TransactionExternalId }, 
+                new { request = new GetTransactionRequest { TransactionExternalId = transaction.TransactionExternalId } }, 
                 transaction);
         }
 
         /// <summary>
-        /// Retrieves a transaction by its external identifier
+        /// Retrieves a transaction by its external identifier and optional creation date
         /// </summary>
-        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <param name="request">The transaction retrieval request</param>
         /// <returns>The transaction information</returns>
         /// <response code="200">Returns the requested transaction</response>
         /// <response code="404">If the transaction is not found</response>
-        [HttpGet("{transactionExternalId}")]
+        [HttpGet]
         [ProducesResponseType(typeof(TransactionResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetTransaction(Guid transactionExternalId)
+        public async Task<IActionResult> GetTransaction([FromBody] GetTransactionRequest request)
         {
-            var transaction = await _transactionService.GetTransactionAsync(transactionExternalId);
+            if (request == null || request.TransactionExternalId == Guid.Empty)
+                return BadRequest("TransactionExternalId is required");
+
+            var transaction = await _transactionService.GetTransactionAsync(request);
             
             if (transaction == null)
                 return NotFound();

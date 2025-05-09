@@ -10,18 +10,12 @@ namespace TransactionService.Domain.Repositories
     public interface ITransactionRepository
     {
         /// <summary>
-        /// Retrieves a transaction by its internal identifier
-        /// </summary>
-        /// <param name="id">The internal ID of the transaction</param>
-        /// <returns>The transaction if found, or null if not found</returns>
-        Task<Transaction> GetByIdAsync(int id);
-        
-        /// <summary>
-        /// Retrieves a transaction by its external identifier
+        /// Retrieves a transaction by its external identifier and creation date
         /// </summary>
         /// <param name="externalId">The external ID of the transaction</param>
+        /// <param name="createdAt">The creation date of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
-        Task<Transaction> GetByExternalIdAsync(Guid externalId);
+        Task<Transaction?> GetByExternalIdAndDateAsync(Guid externalId, DateTime createdAt);
         
         /// <summary>
         /// Adds a new transaction to the repository

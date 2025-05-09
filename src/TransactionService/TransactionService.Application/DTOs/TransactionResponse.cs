@@ -35,7 +35,7 @@ namespace TransactionService.Application.DTOs
         /// <summary>
         /// Current status of the transaction (Pending, Approved, Rejected)
         /// </summary>
-        public string Status { get; set; }
+        public required string Status { get; set; }
         
         /// <summary>
         /// Date and time when the transaction was created

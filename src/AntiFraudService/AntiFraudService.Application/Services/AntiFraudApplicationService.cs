@@ -70,17 +70,19 @@ namespace AntiFraudService.Application.Services
             await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
             
             // Get the newly created validation from the repository
-            var validation = await _validationRepository.GetByTransactionExternalIdAsync(transactionExternalId);
-            
-            // If for some reason the validation wasn't found, create a default one
-            if (validation == null)
+            TransactionValidation validation;
+            try 
+            {
+                validation = await _validationRepository.GetByTransactionExternalIdAsync(transactionExternalId);
+            }
+            catch (KeyNotFoundException)
             {
                 validation = TransactionValidation.CreateRejected(
                     transactionExternalId,
                     sourceAccountId,
                     value,
                     RejectionReason.Other,
-                    "Error processing validation");
+                    "Error procesando la validación");
                 
                 await _validationRepository.AddAsync(validation);
             }
