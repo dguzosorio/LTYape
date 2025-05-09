@@ -43,7 +43,8 @@ namespace TransactionService.API.Controllers
             var transaction = await _transactionService.CreateTransactionAsync(request);
             
             return CreatedAtAction(
-                nameof(GetTransaction),
+                "GetTransaction",
+                "Transactions",
                 new { request = new GetTransactionRequest { TransactionExternalId = transaction.TransactionExternalId } }, 
                 transaction);
         }
