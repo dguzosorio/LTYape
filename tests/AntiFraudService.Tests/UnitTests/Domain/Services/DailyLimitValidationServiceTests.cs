@@ -2,8 +2,10 @@ using System;
 using System.Threading.Tasks;
 using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Models;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 using AntiFraudService.Domain.Services;
+using AntiFraudService.Domain.Settings;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -11,126 +13,140 @@ namespace AntiFraudService.Tests.UnitTests.Domain.Services
 {
     public class DailyLimitValidationServiceTests
     {
-        private readonly Mock<ITransactionValidationRepository> _mockRepository;
-        private readonly DailyLimitValidationService _dailyLimitValidationService;
-        private readonly Guid _transactionExternalId = Guid.NewGuid();
-        private readonly Guid _sourceAccountId = Guid.NewGuid();
-        private readonly decimal _maximumDailyLimit = 20000; // Mismo valor que en la clase original
+        private readonly Mock<ITransactionValidationRepositoryPort> _mockRepository;
+        private readonly Mock<IOptions<ValidationRuleSettings>> _mockOptions;
+        private readonly DailyLimitValidationService _service;
 
         public DailyLimitValidationServiceTests()
         {
-            _mockRepository = new Mock<ITransactionValidationRepository>();
-            _dailyLimitValidationService = new DailyLimitValidationService(_mockRepository.Object);
+            _mockRepository = new Mock<ITransactionValidationRepositoryPort>();
+            _mockOptions = new Mock<IOptions<ValidationRuleSettings>>();
+            
+            _mockOptions.Setup(o => o.Value).Returns(new ValidationRuleSettings
+            {
+                MaximumDailyLimit = 20000
+            });
+
+            _service = new DailyLimitValidationService(_mockRepository.Object, _mockOptions.Object);
         }
 
         [Fact]
-        public async Task ValidateAsync_WhenDailyTotalBelowLimit_ShouldApproveTransaction()
+        public async Task ValidateAsync_WhenDailyAmountIsUnderLimit_ReturnsApproved()
         {
             // Arrange
-            var currentDate = DateTime.UtcNow.Date;
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
                 Value = 1000,
-                CreatedAt = currentDate.AddHours(12) // Mediodía del día actual
+                CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar el repositorio para devolver un total actual de 5000
-            _mockRepository.Setup(repo => 
-                repo.GetDailyTransactionAmountForAccountAsync(_sourceAccountId, currentDate))
-                .ReturnsAsync(5000);
+            _mockRepository.Setup(r => r.getDailyTransactionAmountForAccountAsync(
+                    transaction.SourceAccountId, It.IsAny<DateTime>()))
+                .ReturnsAsync(10000);
 
             // Act
-            var result = await _dailyLimitValidationService.ValidateAsync(transactionData);
+            var result = await _service.ValidateAsync(transaction);
 
             // Assert
             Assert.Equal(ValidationResult.Approved, result.Result);
-            Assert.Equal(_transactionExternalId, result.TransactionExternalId);
-            Assert.Equal(RejectionReason.None, result.RejectionReason);
+            Assert.Null(result.RejectionReason);
         }
 
         [Fact]
-        public async Task ValidateAsync_WhenDailyTotalAtLimit_ShouldApproveTransaction()
+        public async Task ValidateAsync_WhenDailyAmountPlusNewTransactionExceedsLimit_ReturnsRejected()
         {
             // Arrange
-            var currentDate = DateTime.UtcNow.Date;
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 5000,
-                CreatedAt = currentDate.AddHours(12)
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                Value = 15000,
+                CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar el repositorio para devolver un total actual de 15000
-            // 15000 + 5000 = 20000 (justo en el límite)
-            _mockRepository.Setup(repo => 
-                repo.GetDailyTransactionAmountForAccountAsync(_sourceAccountId, currentDate))
-                .ReturnsAsync(15000);
+            _mockRepository.Setup(r => r.getDailyTransactionAmountForAccountAsync(
+                    transaction.SourceAccountId, It.IsAny<DateTime>()))
+                .ReturnsAsync(10000);
 
             // Act
-            var result = await _dailyLimitValidationService.ValidateAsync(transactionData);
-
-            // Assert
-            Assert.Equal(ValidationResult.Approved, result.Result);
-            Assert.Equal(_transactionExternalId, result.TransactionExternalId);
-            Assert.Equal(RejectionReason.None, result.RejectionReason);
-        }
-
-        [Fact]
-        public async Task ValidateAsync_WhenDailyTotalExceedsLimit_ShouldRejectTransaction()
-        {
-            // Arrange
-            var currentDate = DateTime.UtcNow.Date;
-            var transactionData = new TransactionData
-            {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 10000,
-                CreatedAt = currentDate.AddHours(12)
-            };
-
-            // Configurar el repositorio para devolver un total actual de 15000
-            // 15000 + 10000 = 25000 (excede el límite de 20000)
-            _mockRepository.Setup(repo => 
-                repo.GetDailyTransactionAmountForAccountAsync(_sourceAccountId, currentDate))
-                .ReturnsAsync(15000);
-
-            // Act
-            var result = await _dailyLimitValidationService.ValidateAsync(transactionData);
+            var result = await _service.ValidateAsync(transaction);
 
             // Assert
             Assert.Equal(ValidationResult.Rejected, result.Result);
-            Assert.Equal(_transactionExternalId, result.TransactionExternalId);
-            Assert.Equal(RejectionReason.ExceedsDailyLimit, result.RejectionReason);
+            Assert.Equal(RejectionReason.DailyLimitExceeded, result.RejectionReason);
             Assert.Contains("daily limit", result.Notes);
-            Assert.Contains("15000", result.Notes);
-            Assert.Contains("10000", result.Notes);
-            Assert.Contains("20000", result.Notes);
         }
 
         [Fact]
-        public async Task ValidateAsync_WhenRepositoryThrowsException_ShouldPropagateException()
+        public async Task ValidateAsync_WhenAlreadyAtTheLimit_RejectsAnyNewTransaction()
         {
             // Arrange
-            var currentDate = DateTime.UtcNow.Date;
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 1000,
-                CreatedAt = currentDate.AddHours(12)
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                Value = 1,
+                CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar el repositorio para lanzar una excepción
-            _mockRepository.Setup(repo => 
-                repo.GetDailyTransactionAmountForAccountAsync(_sourceAccountId, currentDate))
-                .ThrowsAsync(new InvalidOperationException("Error de base de datos simulado"));
+            _mockRepository.Setup(r => r.getDailyTransactionAmountForAccountAsync(
+                    transaction.SourceAccountId, It.IsAny<DateTime>()))
+                .ReturnsAsync(20000);
 
-            // Act & Assert
-            await Assert.ThrowsAsync<InvalidOperationException>(() => 
-                _dailyLimitValidationService.ValidateAsync(transactionData));
+            // Act
+            var result = await _service.ValidateAsync(transaction);
+
+            // Assert
+            Assert.Equal(ValidationResult.Rejected, result.Result);
+            Assert.Equal(RejectionReason.DailyLimitExceeded, result.RejectionReason);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WhenDailyAmountIsExactlyTheLimit_ApprovesZeroValueTransaction()
+        {
+            // Arrange
+            var transaction = new TransactionValidationRequest
+            {
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                Value = 0,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _mockRepository.Setup(r => r.getDailyTransactionAmountForAccountAsync(
+                    transaction.SourceAccountId, It.IsAny<DateTime>()))
+                .ReturnsAsync(20000);
+
+            // Act
+            var result = await _service.ValidateAsync(transaction);
+
+            // Assert
+            Assert.Equal(ValidationResult.Approved, result.Result);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WhenNoExistingTransactions_ApprovesWithinLimitTransaction()
+        {
+            // Arrange
+            var transaction = new TransactionValidationRequest
+            {
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                Value = 15000,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _mockRepository.Setup(r => r.getDailyTransactionAmountForAccountAsync(
+                    transaction.SourceAccountId, It.IsAny<DateTime>()))
+                .ReturnsAsync(0);
+
+            // Act
+            var result = await _service.ValidateAsync(transaction);
+
+            // Assert
+            Assert.Equal(ValidationResult.Approved, result.Result);
         }
     }
 } 

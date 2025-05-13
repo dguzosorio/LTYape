@@ -8,8 +8,6 @@ COPY ["TransactionService.API/TransactionService.API.csproj", "TransactionServic
 COPY ["TransactionService.Application/TransactionService.Application.csproj", "TransactionService.Application/"]
 COPY ["TransactionService.Domain/TransactionService.Domain.csproj", "TransactionService.Domain/"]
 COPY ["TransactionService.Infrastructure/TransactionService.Infrastructure.csproj", "TransactionService.Infrastructure/"]
-COPY ["../Shared/Shared.Domain/Shared.Domain.csproj", "../Shared/Shared.Domain/"]
-COPY ["../Shared/Shared.Infrastructure/Shared.Infrastructure.csproj", "../Shared/Shared.Infrastructure/"]
 RUN dotnet restore "TransactionService.API/TransactionService.API.csproj"
 COPY . .
 WORKDIR "/src/TransactionService.API"

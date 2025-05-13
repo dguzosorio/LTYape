@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Application.Services;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka;
 using AntiFraudService.Infrastructure.Persistence;
@@ -31,14 +31,13 @@ public class Program
 
         // Register domain services
         builder.Services.AddScoped<IAntiFraudDomainService, AntiFraudDomainService>();
-        builder.Services.AddScoped<ITransactionService, KafkaTransactionService>();
-
-        // Register validation rules
         builder.Services.AddScoped<IValidationRuleService, MaximumAmountValidationService>();
         builder.Services.AddScoped<IValidationRuleService, DailyLimitValidationService>();
 
-        // Register repositories
-        builder.Services.AddScoped<ITransactionValidationRepository, TransactionValidationRepository>();
+        // Register ports and adapters (hexagonal architecture)
+        builder.Services.AddScoped<ITransactionEventPort, KafkaTransactionEventService>();
+        builder.Services.AddScoped<ITransactionEventConsumerPort, KafkaTransactionEventConsumerService>();
+        builder.Services.AddScoped<ITransactionValidationRepositoryPort, TransactionValidationRepositoryAdapter>();
 
         // Configure database
         builder.Services.AddDbContext<AntiFraudDbContext>(options =>

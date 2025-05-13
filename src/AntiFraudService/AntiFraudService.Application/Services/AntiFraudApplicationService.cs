@@ -5,7 +5,7 @@ using AntiFraudService.Domain.Models;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Enums;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 
 namespace AntiFraudService.Application.Services
 {
@@ -15,16 +15,16 @@ namespace AntiFraudService.Application.Services
     public class AntiFraudApplicationService : IAntiFraudApplicationService
     {
         private readonly IAntiFraudDomainService _antiFraudDomainService;
-        private readonly ITransactionValidationRepository _validationRepository;
+        private readonly ITransactionValidationRepositoryPort _validationRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AntiFraudApplicationService"/> class
         /// </summary>
         /// <param name="antiFraudDomainService">The anti-fraud domain service</param>
-        /// <param name="validationRepository">The repository for accessing validation records</param>
+        /// <param name="validationRepository">The repository port for accessing validation records</param>
         public AntiFraudApplicationService(
             IAntiFraudDomainService antiFraudDomainService,
-            ITransactionValidationRepository validationRepository)
+            ITransactionValidationRepositoryPort validationRepository)
         {
             _antiFraudDomainService = antiFraudDomainService;
             _validationRepository = validationRepository;
@@ -35,10 +35,10 @@ namespace AntiFraudService.Application.Services
         /// </summary>
         /// <param name="request">The transaction validation request</param>
         /// <returns>A task representing the asynchronous operation</returns>
-        public async Task ProcessTransactionValidationRequestAsync(TransactionValidationRequest request)
+        public async Task ProcessTransactionValidationRequestAsync(AntiFraudService.Application.DTOs.TransactionValidationRequest request)
         {
             // Map DTO to domain model
-            var transactionData = MapToTransactionData(request);
+            var transactionData = MapRequestToTransactionData(request);
             
             // Process the validation through the domain service
             await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
@@ -73,7 +73,7 @@ namespace AntiFraudService.Application.Services
             TransactionValidation validation;
             try 
             {
-                validation = await _validationRepository.GetByTransactionExternalIdAsync(transactionExternalId);
+                validation = await _validationRepository.getByTransactionExternalIdAsync(transactionExternalId);
             }
             catch (KeyNotFoundException)
             {
@@ -84,7 +84,7 @@ namespace AntiFraudService.Application.Services
                     RejectionReason.Other,
                     "Error procesando la validación");
                 
-                await _validationRepository.AddAsync(validation);
+                await _validationRepository.addAsync(validation);
             }
             
             return validation;
@@ -95,7 +95,25 @@ namespace AntiFraudService.Application.Services
         /// </summary>
         /// <param name="request">The transaction validation request DTO</param>
         /// <returns>The transaction data domain model</returns>
-        private static TransactionData MapToTransactionData(TransactionValidationRequest request)
+        private static TransactionData MapRequestToTransactionData(AntiFraudService.Application.DTOs.TransactionValidationRequest request)
+        {
+            return new TransactionData
+            {
+                TransactionExternalId = request.TransactionExternalId,
+                SourceAccountId = request.SourceAccountId,
+                TargetAccountId = request.TargetAccountId,
+                TransferTypeId = request.TransferTypeId,
+                Value = request.Value,
+                CreatedAt = request.CreatedAt
+            };
+        }
+        
+        /// <summary>
+        /// Maps a domain transaction validation request to a transaction data domain model
+        /// </summary>
+        /// <param name="request">The domain transaction validation request</param>
+        /// <returns>The transaction data domain model</returns>
+        private static TransactionData MapToTransactionData(AntiFraudService.Domain.Models.TransactionValidationRequest request)
         {
             return new TransactionData
             {

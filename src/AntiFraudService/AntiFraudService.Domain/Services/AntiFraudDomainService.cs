@@ -4,34 +4,27 @@ using System.Threading.Tasks;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Models;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 
 namespace AntiFraudService.Domain.Services
 {
     /// <summary>
     /// Domain service that orchestrates transaction validation against fraud rules
     /// </summary>
-    public class AntiFraudDomainService : IAntiFraudDomainService
+    /// <remarks>
+    /// Initializes a new instance of the <see cref="AntiFraudDomainService"/> class
+    /// </remarks>
+    /// <param name="validationRules">The collection of validation rules to apply</param>
+    /// <param name="transactionEventPort">The transaction event port for sending responses</param>
+    /// <param name="validationRepository">The repository for storing validation results</param>
+    public class AntiFraudDomainService(
+        IEnumerable<IValidationRuleService> validationRules,
+        ITransactionEventPort transactionEventPort,
+        ITransactionValidationRepositoryPort validationRepository) : IAntiFraudDomainService
     {
-        private readonly IEnumerable<IValidationRuleService> _validationRules;
-        private readonly ITransactionService _transactionService;
-        private readonly ITransactionValidationRepository _validationRepository;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AntiFraudDomainService"/> class
-        /// </summary>
-        /// <param name="validationRules">The collection of validation rules to apply</param>
-        /// <param name="transactionService">The transaction service for sending responses</param>
-        /// <param name="validationRepository">The repository for storing validation results</param>
-        public AntiFraudDomainService(
-            IEnumerable<IValidationRuleService> validationRules,
-            ITransactionService transactionService,
-            ITransactionValidationRepository validationRepository)
-        {
-            _validationRules = validationRules;
-            _transactionService = transactionService;
-            _validationRepository = validationRepository;
-        }
+        private readonly IEnumerable<IValidationRuleService> _validationRules = validationRules;
+        private readonly ITransactionEventPort _transactionEventPort = transactionEventPort;
+        private readonly ITransactionValidationRepositoryPort _validationRepository = validationRepository;
 
         /// <summary>
         /// Validates a transaction against all fraud rules
@@ -75,10 +68,10 @@ namespace AntiFraudService.Domain.Services
                     finalResponse.Notes);
 
             // Save the validation result
-            await _validationRepository.AddAsync(validation);
+            await _validationRepository.addAsync(validation);
 
             // Send the response back to the Transaction service
-            await _transactionService.SendValidationResponseAsync(finalResponse);
+            await _transactionEventPort.sendValidationResponseAsync(finalResponse);
         }
     }
 } 

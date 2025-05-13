@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using TransactionService.Domain.Entities;
 using TransactionService.Domain.Enums;
 using TransactionService.Domain.Exceptions;
-using TransactionService.Domain.Repositories;
+using TransactionService.Domain.Ports;
 
 namespace TransactionService.Domain.Services
 {
@@ -12,18 +12,18 @@ namespace TransactionService.Domain.Services
     /// </summary>
     public class TransactionDomainService : ITransactionDomainService
     {
-        private readonly ITransactionRepository _transactionRepository;
-        private readonly IAntiFraudService _antiFraudService;
+        private readonly ITransactionRepositoryPort _transactionRepository;
+        private readonly IAntiFraudEventPort _antiFraudEventPort;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TransactionDomainService"/> class
         /// </summary>
-        /// <param name="transactionRepository">The transaction repository</param>
-        /// <param name="antiFraudService">The anti-fraud service</param>
+        /// <param name="transactionRepository">The transaction repository port</param>
+        /// <param name="antiFraudEventPort">The anti-fraud event port</param>
         public TransactionDomainService(
-            ITransactionRepository transactionRepository,
-            IAntiFraudService antiFraudService) => 
-            (_transactionRepository, _antiFraudService) = (transactionRepository, antiFraudService);
+            ITransactionRepositoryPort transactionRepository,
+            IAntiFraudEventPort antiFraudEventPort) => 
+            (_transactionRepository, _antiFraudEventPort) = (transactionRepository, antiFraudEventPort);
 
         /// <summary>
         /// Creates a new transaction with the specified details
@@ -46,8 +46,8 @@ namespace TransactionService.Domain.Services
                 transferTypeId,
                 value);
             
-            await _transactionRepository.AddAsync(transaction);
-            await _antiFraudService.SendTransactionForValidationAsync(transaction);
+            await _transactionRepository.addAsync(transaction);
+            await _antiFraudEventPort.sendTransactionForValidationAsync(transaction);
             
             return transaction;
         }
@@ -58,7 +58,7 @@ namespace TransactionService.Domain.Services
         /// <param name="externalId">The external identifier of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
         public async Task<Transaction?> GetTransactionByExternalIdAsync(Guid externalId) =>
-            await _transactionRepository.GetByExternalIdAndDateAsync(externalId, DateTime.UtcNow);
+            await _transactionRepository.getByExternalIdAndDateAsync(externalId, DateTime.UtcNow);
 
         /// <summary>
         /// Retrieves a transaction by its external identifier and creation date
@@ -67,7 +67,7 @@ namespace TransactionService.Domain.Services
         /// <param name="createdAt">The creation date of the transaction</param>
         /// <returns>The transaction if found, or null if not found</returns>
         public async Task<Transaction?> GetTransactionByExternalIdAndDateAsync(Guid externalId, DateTime createdAt) =>
-            await _transactionRepository.GetByExternalIdAndDateAsync(externalId, createdAt);
+            await _transactionRepository.getByExternalIdAndDateAsync(externalId, createdAt);
 
         /// <summary>
         /// Updates the status of a transaction
@@ -84,7 +84,7 @@ namespace TransactionService.Domain.Services
                 throw new TransactionDomainException("Only pending transactions can be updated");
 
             transaction.UpdateStatus(status);
-            await _transactionRepository.UpdateAsync(transaction);
+            await _transactionRepository.updateAsync(transaction);
         }
     }
 } 

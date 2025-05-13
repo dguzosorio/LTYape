@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using TransactionService.Domain.Repositories;
+using TransactionService.Domain.Ports;
 using TransactionService.Infrastructure.Kafka.Messages;
 
 namespace TransactionService.Infrastructure.Kafka
@@ -107,15 +107,15 @@ namespace TransactionService.Infrastructure.Kafka
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var transactionRepository = scope.ServiceProvider.GetRequiredService<ITransactionRepository>();
+                var transactionRepository = scope.ServiceProvider.GetRequiredService<ITransactionRepositoryPort>();
                 
                 if (transactionRepository == null)
                 {
-                    _logger.LogError("Failed to resolve ITransactionRepository service");
+                    _logger.LogError("Failed to resolve ITransactionRepositoryPort service");
                     return;
                 }
                 
-                var transaction = await transactionRepository.GetByExternalIdAndDateAsync(
+                var transaction = await transactionRepository.getByExternalIdAndDateAsync(
                     message.TransactionExternalId,
                     DateTime.UtcNow);
                     
@@ -142,7 +142,7 @@ namespace TransactionService.Infrastructure.Kafka
                         transaction.TransactionExternalId, message.RejectionReason);
                 }
                 
-                await transactionRepository.UpdateAsync(transaction);
+                await transactionRepository.updateAsync(transaction);
                 
                 _logger.LogInformation(
                     "Transaction {TransactionId} updated with status: {Status}",

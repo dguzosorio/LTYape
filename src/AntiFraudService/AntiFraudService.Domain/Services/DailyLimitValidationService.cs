@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Models;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 
 namespace AntiFraudService.Domain.Services
 {
@@ -11,13 +11,13 @@ namespace AntiFraudService.Domain.Services
     public class DailyLimitValidationService : IValidationRuleService
     {
         private const decimal MaximumDailyLimit = 20000;
-        private readonly ITransactionValidationRepository _validationRepository;
+        private readonly ITransactionValidationRepositoryPort _validationRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DailyLimitValidationService"/> class
         /// </summary>
         /// <param name="validationRepository">The transaction validation repository</param>
-        public DailyLimitValidationService(ITransactionValidationRepository validationRepository)
+        public DailyLimitValidationService(ITransactionValidationRepositoryPort validationRepository)
         {
             _validationRepository = validationRepository;
         }
@@ -33,7 +33,7 @@ namespace AntiFraudService.Domain.Services
         public async Task<ValidationResponse> ValidateAsync(TransactionData transaction)
         {
             // Get the current daily total for this account
-            var currentDailyTotal = await _validationRepository.GetDailyTransactionAmountForAccountAsync(
+            var currentDailyTotal = await _validationRepository.getDailyTransactionAmountForAccountAsync(
                 transaction.SourceAccountId, 
                 transaction.CreatedAt.Date);
 

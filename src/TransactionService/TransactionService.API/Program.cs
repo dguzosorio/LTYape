@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using TransactionService.Application.Services;
-using TransactionService.Domain.Repositories;
 using TransactionService.Domain.Services;
 using TransactionService.Infrastructure.Kafka;
 using TransactionService.Infrastructure.Persistence;
@@ -9,6 +7,7 @@ using TransactionService.Infrastructure.Repositories;
 using TransactionService.Infrastructure.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using TransactionService.Domain.Ports;
 
 namespace TransactionService.API;
 
@@ -33,10 +32,10 @@ public class Program
 
         // Register domain services
         builder.Services.AddScoped<ITransactionDomainService, TransactionDomainService>();
-        builder.Services.AddScoped<IAntiFraudService, KafkaAntiFraudService>();
+        builder.Services.AddScoped<IAntiFraudEventPort, KafkaAntiFraudService>();
 
-        // Register repositories
-        builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+        // Register repositories (hexagonal architecture)
+        builder.Services.AddScoped<ITransactionRepositoryPort, TransactionRepositoryAdapter>();
 
         // Configure database
         builder.Services.AddDbContext<TransactionDbContext>(options =>

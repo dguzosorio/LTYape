@@ -5,7 +5,7 @@ using AntiFraudService.Application.Services;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Models;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 using AntiFraudService.Domain.Services;
 using Moq;
 using Xunit;
@@ -15,7 +15,7 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
     public class AntiFraudApplicationServiceTests
     {
         private readonly Mock<IAntiFraudDomainService> _mockAntiFraudDomainService;
-        private readonly Mock<ITransactionValidationRepository> _mockRepository;
+        private readonly Mock<ITransactionValidationRepositoryPort> _mockRepository;
         private readonly AntiFraudApplicationService _antiFraudApplicationService;
         private readonly Guid _transactionExternalId = Guid.NewGuid();
         private readonly Guid _sourceAccountId = Guid.NewGuid();
@@ -24,7 +24,7 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
         public AntiFraudApplicationServiceTests()
         {
             _mockAntiFraudDomainService = new Mock<IAntiFraudDomainService>();
-            _mockRepository = new Mock<ITransactionValidationRepository>();
+            _mockRepository = new Mock<ITransactionValidationRepositoryPort>();
             
             _antiFraudApplicationService = new AntiFraudApplicationService(
                 _mockAntiFraudDomainService.Object,
@@ -46,15 +46,15 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
             };
             
             _mockAntiFraudDomainService.Setup(s => 
-                s.ValidateTransactionAsync(It.IsAny<TransactionData>()))
-                .Returns(Task.CompletedTask);
+                s.ValidateTransactionAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(new ValidationResponse());
             
             // Act
             await _antiFraudApplicationService.ProcessTransactionValidationRequestAsync(request);
             
             // Assert
             _mockAntiFraudDomainService.Verify(s => 
-                s.ValidateTransactionAsync(It.Is<TransactionData>(data => 
+                s.ValidateTransactionAsync(It.Is<TransactionValidationRequest>(data => 
                     data.TransactionExternalId == _transactionExternalId &&
                     data.SourceAccountId == _sourceAccountId &&
                     data.TargetAccountId == _targetAccountId &&
@@ -68,18 +68,26 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
         {
             // Arrange
             var now = DateTime.UtcNow;
-            var expectedValidation = new TransactionValidation(
-                _transactionExternalId,
-                _sourceAccountId,
-                1000,
-                ValidationResult.Approved);
+            var expectedValidation = new TransactionValidation
+            {
+                TransactionExternalId = _transactionExternalId,
+                SourceAccountId = _sourceAccountId,
+                TransactionAmount = 1000,
+                Result = ValidationResult.Approved
+            };
+            
+            var validationResponse = new ValidationResponse
+            {
+                TransactionExternalId = _transactionExternalId,
+                Result = ValidationResult.Approved
+            };
             
             _mockAntiFraudDomainService.Setup(s => 
-                s.ValidateTransactionAsync(It.IsAny<TransactionData>()))
-                .Returns(Task.CompletedTask);
+                s.ValidateTransactionAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse);
             
             _mockRepository.Setup(r => 
-                r.GetByTransactionExternalIdAsync(_transactionExternalId))
+                r.getByTransactionExternalIdAsync(_transactionExternalId))
                 .ReturnsAsync(expectedValidation);
             
             // Act
@@ -93,7 +101,7 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
             Assert.Same(expectedValidation, result);
             
             _mockAntiFraudDomainService.Verify(s => 
-                s.ValidateTransactionAsync(It.Is<TransactionData>(data => 
+                s.ValidateTransactionAsync(It.Is<TransactionValidationRequest>(data => 
                     data.TransactionExternalId == _transactionExternalId &&
                     data.SourceAccountId == _sourceAccountId &&
                     data.Value == 1000 &&
@@ -106,6 +114,12 @@ namespace AntiFraudService.Tests.UnitTests.Application.Services
         {
             // Arrange
             var now = DateTime.UtcNow;
+            
+            var validationResponse = new ValidationResponse
+            {
+                TransactionExternalId = _transactionExternalId,
+                Result = ValidationResult.Approved
+            };
             
             _mockAntiFraudDomainService.Setup(s => 
                 s.ValidateTransactionAsync(It.IsAny<TransactionData>()))
