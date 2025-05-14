@@ -4,26 +4,25 @@ using Moq;
 using TransactionService.Domain.Entities;
 using TransactionService.Domain.Enums;
 using TransactionService.Domain.Exceptions;
-using TransactionService.Domain.Repositories;
+using TransactionService.Domain.Ports;
 using TransactionService.Domain.Services;
-using TransactionService.Infrastructure.Kafka;
 using Xunit;
 
 namespace TransactionService.Tests.UnitTests.Domain.Services
 {
     public class TransactionDomainServiceTests
     {
-        private readonly Mock<ITransactionRepository> _mockTransactionRepository;
-        private readonly Mock<IAntiFraudService> _mockAntiFraudService;
+        private readonly Mock<ITransactionRepositoryPort> _mockTransactionRepository;
+        private readonly Mock<IAntiFraudEventPort> mockAntiFraudEventPort;
         private readonly TransactionDomainService _service;
         private readonly Guid _sourceAccountId = Guid.NewGuid();
         private readonly Guid _targetAccountId = Guid.NewGuid();
 
         public TransactionDomainServiceTests()
         {
-            _mockTransactionRepository = new Mock<ITransactionRepository>();
-            _mockAntiFraudService = new Mock<IAntiFraudService>();
-            _service = new TransactionDomainService(_mockTransactionRepository.Object, _mockAntiFraudService.Object);
+            _mockTransactionRepository = new Mock<ITransactionRepositoryPort>();
+            mockAntiFraudEventPort = new Mock<IAntiFraudEventPort>();
+            _service = new TransactionDomainService(_mockTransactionRepository.Object, mockAntiFraudEventPort.Object);
         }
 
         [Fact]
@@ -34,11 +33,11 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             const int transferType = 1;
             
             Transaction capturedTransaction = null;
-            _mockTransactionRepository.Setup(r => r.AddAsync(It.IsAny<Transaction>()))
+            _mockTransactionRepository.Setup(r => r.addAsync(It.IsAny<Transaction>()))
                 .Callback<Transaction>(t => capturedTransaction = t)
                 .Returns(Task.CompletedTask);
             
-            _mockAntiFraudService.Setup(s => s.SendTransactionForValidationAsync(It.IsAny<Transaction>()))
+            mockAntiFraudEventPort.Setup(s => s.sendTransactionForValidationAsync(It.IsAny<Transaction>()))
                 .Returns(Task.CompletedTask);
             
             // Act
@@ -56,10 +55,10 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             Assert.Equal(transactionAmount, result.Value);
             Assert.Equal(TransactionStatus.Pending, result.Status);
             
-            _mockTransactionRepository.Verify(r => r.AddAsync(It.IsAny<Transaction>()), Times.Once);
+            _mockTransactionRepository.Verify(r => r.addAsync(It.IsAny<Transaction>()), Times.Once);
             
-            _mockAntiFraudService.Verify(s => 
-                s.SendTransactionForValidationAsync(It.IsAny<Transaction>()), 
+            mockAntiFraudEventPort.Verify(s => 
+                s.sendTransactionForValidationAsync(It.IsAny<Transaction>()), 
                 Times.Once);
         }
 
@@ -79,9 +78,9 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             
             Assert.Contains("greater than zero", exception.Message);
             
-            _mockTransactionRepository.Verify(r => r.AddAsync(It.IsAny<Transaction>()), Times.Never);
-            _mockAntiFraudService.Verify(s => 
-                s.SendTransactionForValidationAsync(It.IsAny<Transaction>()), 
+            _mockTransactionRepository.Verify(r => r.addAsync(It.IsAny<Transaction>()), Times.Never);
+            mockAntiFraudEventPort.Verify(s => 
+                s.sendTransactionForValidationAsync(It.IsAny<Transaction>()), 
                 Times.Never);
         }
 
@@ -92,7 +91,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             var transactionId = Guid.NewGuid();
             var expectedTransaction = new Transaction(_sourceAccountId, _targetAccountId, 1, 500);
             
-            _mockTransactionRepository.Setup(r => r.GetByExternalIdAsync(transactionId))
+            _mockTransactionRepository.Setup(r => r.getByExternalIdAndDateAsync(transactionId, It.IsAny<DateTime>()))
                 .ReturnsAsync(expectedTransaction);
             
             // Act
@@ -100,7 +99,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             
             // Assert
             Assert.Same(expectedTransaction, result);
-            _mockTransactionRepository.Verify(r => r.GetByExternalIdAsync(transactionId), Times.Once);
+            _mockTransactionRepository.Verify(r => r.getByExternalIdAndDateAsync(transactionId, It.IsAny<DateTime>()), Times.Once);
         }
 
         [Fact]
@@ -109,7 +108,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             // Arrange
             var nonExistentId = Guid.NewGuid();
             
-            _mockTransactionRepository.Setup(r => r.GetByExternalIdAsync(nonExistentId))
+            _mockTransactionRepository.Setup(r => r.getByExternalIdAndDateAsync(nonExistentId, It.IsAny<DateTime>()))
                 .ReturnsAsync((Transaction)null);
             
             // Act
@@ -117,14 +116,14 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             
             // Assert
             Assert.Null(result);
-            _mockTransactionRepository.Verify(r => r.GetByExternalIdAsync(nonExistentId), Times.Once);
+            _mockTransactionRepository.Verify(r => r.getByExternalIdAndDateAsync(nonExistentId, It.IsAny<DateTime>()), Times.Once);
         }
 
         [Fact]
         public async Task CreateTransactionAsync_WhenRepositoryThrowsException_ShouldPropagateException()
         {
             // Arrange
-            _mockTransactionRepository.Setup(r => r.AddAsync(It.IsAny<Transaction>()))
+            _mockTransactionRepository.Setup(r => r.addAsync(It.IsAny<Transaction>()))
                 .ThrowsAsync(new InvalidOperationException("Error de base de datos simulado"));
             
             // Act & Assert
@@ -150,7 +149,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             );
 
             _mockTransactionRepository
-                .Setup(x => x.GetByExternalIdAndDateAsync(externalId, createdAt))
+                .Setup(x => x.getByExternalIdAndDateAsync(externalId, createdAt))
                 .ReturnsAsync(expectedTransaction);
 
             // Act
@@ -170,7 +169,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             var createdAt = DateTime.UtcNow;
 
             _mockTransactionRepository
-                .Setup(x => x.GetByExternalIdAndDateAsync(externalId, createdAt))
+                .Setup(x => x.getByExternalIdAndDateAsync(externalId, createdAt))
                 .ReturnsAsync((Transaction)null);
 
             // Act
@@ -201,11 +200,11 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             Assert.Equal(TransactionStatus.Pending, result.Status);
 
             _mockTransactionRepository.Verify(
-                x => x.AddAsync(It.IsAny<Transaction>()),
+                x => x.addAsync(It.IsAny<Transaction>()),
                 Times.Once);
 
-            _mockAntiFraudService.Verify(
-                x => x.SendTransactionForValidationAsync(It.IsAny<Transaction>()),
+            mockAntiFraudEventPort.Verify(
+                x => x.sendTransactionForValidationAsync(It.IsAny<Transaction>()),
                 Times.Once);
         }
 
@@ -240,7 +239,7 @@ namespace TransactionService.Tests.UnitTests.Domain.Services
             // Assert
             Assert.Equal(TransactionStatus.Approved, transaction.Status);
             _mockTransactionRepository.Verify(
-                x => x.UpdateAsync(It.IsAny<Transaction>()),
+                x => x.updateAsync(It.IsAny<Transaction>()),
                 Times.Once);
         }
 

@@ -8,8 +8,6 @@ COPY ["AntiFraudService.API/AntiFraudService.API.csproj", "AntiFraudService.API/
 COPY ["AntiFraudService.Application/AntiFraudService.Application.csproj", "AntiFraudService.Application/"]
 COPY ["AntiFraudService.Domain/AntiFraudService.Domain.csproj", "AntiFraudService.Domain/"]
 COPY ["AntiFraudService.Infrastructure/AntiFraudService.Infrastructure.csproj", "AntiFraudService.Infrastructure/"]
-COPY ["../Shared/Shared.Domain/Shared.Domain.csproj", "../Shared/Shared.Domain/"]
-COPY ["../Shared/Shared.Infrastructure/Shared.Infrastructure.csproj", "../Shared/Shared.Infrastructure/"]
 RUN dotnet restore "AntiFraudService.API/AntiFraudService.API.csproj"
 COPY . .
 WORKDIR "/src/AntiFraudService.API"

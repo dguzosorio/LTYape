@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using TransactionService.Application.Services;
-using TransactionService.Domain.Repositories;
 using TransactionService.Domain.Services;
 using TransactionService.Infrastructure.Kafka;
 using TransactionService.Infrastructure.Persistence;
@@ -9,6 +7,11 @@ using TransactionService.Infrastructure.Repositories;
 using TransactionService.Infrastructure.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using TransactionService.Domain.Ports;
+using FluentValidation.AspNetCore;
+using FluentValidation;
+using TransactionService.Application.Validators;
+using TransactionService.Application.DTOs;
 
 namespace TransactionService.API;
 
@@ -19,7 +22,16 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
 
         // Add services to the container.
-        builder.Services.AddControllers();
+        builder.Services.AddControllers()
+            .AddFluentValidation(fv => 
+            {
+                fv.ImplicitlyValidateChildProperties = true;
+                fv.DisableDataAnnotationsValidation = true;
+            });
+
+        // Register FluentValidation validators
+        builder.Services.AddScoped<IValidator<CreateTransactionRequest>, CreateTransactionRequestValidator>();
+        builder.Services.AddScoped<IValidator<GetTransactionRequest>, GetTransactionRequestValidator>();
 
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
@@ -33,10 +45,10 @@ public class Program
 
         // Register domain services
         builder.Services.AddScoped<ITransactionDomainService, TransactionDomainService>();
-        builder.Services.AddScoped<IAntiFraudService, KafkaAntiFraudService>();
+        builder.Services.AddScoped<IAntiFraudEventPort, KafkaAntiFraudService>();
 
-        // Register repositories
-        builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+        // Register repositories (hexagonal architecture)
+        builder.Services.AddScoped<ITransactionRepositoryPort, TransactionRepositoryAdapter>();
 
         // Configure database
         builder.Services.AddDbContext<TransactionDbContext>(options =>

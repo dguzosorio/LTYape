@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Enums;
 using AntiFraudService.Domain.Models;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 using AntiFraudService.Domain.Services;
 using Moq;
 using Xunit;
@@ -13,185 +13,182 @@ namespace AntiFraudService.Tests.UnitTests.Domain.Services
 {
     public class AntiFraudDomainServiceTests
     {
-        private readonly Mock<ITransactionValidationRepository> _mockRepository;
+        private readonly Mock<ITransactionValidationRepositoryPort> _mockRepository;
+        private readonly Mock<ITransactionEventPort> _mockEventPort;
         private readonly Mock<IValidationRuleService> _mockRuleService1;
         private readonly Mock<IValidationRuleService> _mockRuleService2;
-        private readonly AntiFraudDomainService _antiFraudDomainService;
-        private readonly Guid _transactionExternalId = Guid.NewGuid();
-        private readonly Guid _sourceAccountId = Guid.NewGuid();
+        private readonly AntiFraudDomainService _service;
 
         public AntiFraudDomainServiceTests()
         {
-            _mockRepository = new Mock<ITransactionValidationRepository>();
+            _mockRepository = new Mock<ITransactionValidationRepositoryPort>();
+            _mockEventPort = new Mock<ITransactionEventPort>();
             _mockRuleService1 = new Mock<IValidationRuleService>();
             _mockRuleService2 = new Mock<IValidationRuleService>();
 
-            var validationRules = new List<IValidationRuleService>
-            {
-                _mockRuleService1.Object,
-                _mockRuleService2.Object
+            var validationRules = new List<IValidationRuleService> 
+            { 
+                _mockRuleService1.Object, 
+                _mockRuleService2.Object 
             };
 
-            _antiFraudDomainService = new AntiFraudDomainService(
-                validationRules,
-                _mockRepository.Object);
+            _service = new AntiFraudDomainService(
+                _mockRepository.Object,
+                _mockEventPort.Object, 
+                validationRules);
         }
 
         [Fact]
-        public async Task ValidateTransactionAsync_WhenAllRulesApprove_ShouldSaveApprovedValidation()
+        public async Task ValidateTransactionAsync_WhenAllRulesApprove_ShouldApproveTransaction()
         {
             // Arrange
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 1000,
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                TargetAccountId = Guid.NewGuid(),
+                Value = 100,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar las reglas para aprobar la transacción
-            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateApproved(_transactionExternalId));
+            var validationResponse1 = new ValidationResponse
+            {
+                TransactionExternalId = transaction.TransactionExternalId,
+                Result = ValidationResult.Approved,
+                RejectionReason = null,
+                Notes = "Rule 1 passed"
+            };
 
-            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateApproved(_transactionExternalId));
+            var validationResponse2 = new ValidationResponse
+            {
+                TransactionExternalId = transaction.TransactionExternalId,
+                Result = ValidationResult.Approved,
+                RejectionReason = null,
+                Notes = "Rule 2 passed"
+            };
 
-            TransactionValidation capturedValidation = null;
-            _mockRepository.Setup(r => r.AddAsync(It.IsAny<TransactionValidation>()))
-                .Callback<TransactionValidation>(v => capturedValidation = v)
+            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse1);
+            
+            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse2);
+            
+            _mockRepository.Setup(r => r.addAsync(It.IsAny<TransactionValidation>()))
+                .Returns(Task.CompletedTask);
+            
+            _mockEventPort.Setup(e => e.sendValidationResponseAsync(It.IsAny<ValidationResponse>()))
                 .Returns(Task.CompletedTask);
 
             // Act
-            await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
+            var result = await _service.ValidateTransactionAsync(transaction);
 
             // Assert
-            _mockRepository.Verify(r => r.AddAsync(It.IsAny<TransactionValidation>()), Times.Once);
+            Assert.Equal(ValidationResult.Approved, result.Result);
+            Assert.Null(result.RejectionReason);
+            Assert.Contains("Rule 1 passed", result.Notes);
+            Assert.Contains("Rule 2 passed", result.Notes);
             
-            Assert.NotNull(capturedValidation);
-            Assert.Equal(_transactionExternalId, capturedValidation.TransactionExternalId);
-            Assert.Equal(_sourceAccountId, capturedValidation.SourceAccountId);
-            Assert.Equal(1000, capturedValidation.TransactionAmount);
-            Assert.Equal(ValidationResult.Approved, capturedValidation.Result);
-            Assert.Equal(RejectionReason.None, capturedValidation.RejectionReason);
+            _mockRepository.Verify(r => r.addAsync(It.Is<TransactionValidation>(
+                t => t.Result == ValidationResult.Approved)), Times.Once);
+            
+            _mockEventPort.Verify(e => e.sendValidationResponseAsync(It.Is<ValidationResponse>(
+                r => r.Result == ValidationResult.Approved)), Times.Once);
         }
 
         [Fact]
-        public async Task ValidateTransactionAsync_WhenOneRuleRejects_ShouldSaveRejectedValidation()
+        public async Task ValidateTransactionAsync_WhenAnyRuleRejects_ShouldRejectTransaction()
         {
             // Arrange
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 3000,
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                TargetAccountId = Guid.NewGuid(),
+                Value = 2500,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar la primera regla para aprobar
-            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateApproved(_transactionExternalId));
+            var validationResponse1 = new ValidationResponse
+            {
+                TransactionExternalId = transaction.TransactionExternalId,
+                Result = ValidationResult.Approved,
+                RejectionReason = null,
+                Notes = "Rule 1 passed"
+            };
 
-            // Configurar la segunda regla para rechazar
-            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateRejected(
-                    _transactionExternalId,
-                    RejectionReason.ExceedsMaximumAmount,
-                    "Monto excede el máximo permitido"));
+            var validationResponse2 = new ValidationResponse
+            {
+                TransactionExternalId = transaction.TransactionExternalId,
+                Result = ValidationResult.Rejected,
+                RejectionReason = RejectionReason.ExceedsMaximumAmount,
+                Notes = "Amount exceeds maximum allowed"
+            };
 
-            TransactionValidation capturedValidation = null;
-            _mockRepository.Setup(r => r.AddAsync(It.IsAny<TransactionValidation>()))
-                .Callback<TransactionValidation>(v => capturedValidation = v)
+            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse1);
+            
+            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse2);
+            
+            _mockRepository.Setup(r => r.addAsync(It.IsAny<TransactionValidation>()))
+                .Returns(Task.CompletedTask);
+            
+            _mockEventPort.Setup(e => e.sendValidationResponseAsync(It.IsAny<ValidationResponse>()))
                 .Returns(Task.CompletedTask);
 
             // Act
-            await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
+            var result = await _service.ValidateTransactionAsync(transaction);
 
             // Assert
-            _mockRepository.Verify(r => r.AddAsync(It.IsAny<TransactionValidation>()), Times.Once);
+            Assert.Equal(ValidationResult.Rejected, result.Result);
+            Assert.Equal(RejectionReason.ExceedsMaximumAmount, result.RejectionReason);
+            Assert.Contains("Amount exceeds maximum allowed", result.Notes);
             
-            Assert.NotNull(capturedValidation);
-            Assert.Equal(_transactionExternalId, capturedValidation.TransactionExternalId);
-            Assert.Equal(_sourceAccountId, capturedValidation.SourceAccountId);
-            Assert.Equal(3000, capturedValidation.TransactionAmount);
-            Assert.Equal(ValidationResult.Rejected, capturedValidation.Result);
-            Assert.Equal(RejectionReason.ExceedsMaximumAmount, capturedValidation.RejectionReason);
-            Assert.Contains("Monto excede", capturedValidation.Notes);
+            _mockRepository.Verify(r => r.addAsync(It.Is<TransactionValidation>(
+                t => t.Result == ValidationResult.Rejected)), Times.Once);
+            
+            _mockEventPort.Verify(e => e.sendValidationResponseAsync(It.Is<ValidationResponse>(
+                r => r.Result == ValidationResult.Rejected)), Times.Once);
         }
 
         [Fact]
-        public async Task ValidateTransactionAsync_WhenBothRulesReject_ShouldSaveFirstRejection()
+        public async Task ValidateTransactionAsync_WhenEventPortFails_ShouldStillSaveValidation()
         {
             // Arrange
-            var transactionData = new TransactionData
+            var transaction = new TransactionValidationRequest
             {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 5000,
+                TransactionExternalId = Guid.NewGuid(),
+                SourceAccountId = Guid.NewGuid(),
+                TargetAccountId = Guid.NewGuid(),
+                Value = 100,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Configurar la primera regla para rechazar
-            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateRejected(
-                    _transactionExternalId,
-                    RejectionReason.ExceedsMaximumAmount,
-                    "Monto excede el máximo permitido"));
+            var validationResponse = new ValidationResponse
+            {
+                TransactionExternalId = transaction.TransactionExternalId,
+                Result = ValidationResult.Approved,
+                RejectionReason = null,
+                Notes = "All rules passed"
+            };
 
-            // Configurar la segunda regla para rechazar también
-            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateRejected(
-                    _transactionExternalId,
-                    RejectionReason.ExceedsDailyLimit,
-                    "Excede el límite diario"));
-
-            TransactionValidation capturedValidation = null;
-            _mockRepository.Setup(r => r.AddAsync(It.IsAny<TransactionValidation>()))
-                .Callback<TransactionValidation>(v => capturedValidation = v)
+            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse);
+            
+            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionValidationRequest>()))
+                .ReturnsAsync(validationResponse);
+            
+            _mockRepository.Setup(r => r.addAsync(It.IsAny<TransactionValidation>()))
                 .Returns(Task.CompletedTask);
-
-            // Act
-            await _antiFraudDomainService.ValidateTransactionAsync(transactionData);
-
-            // Assert
-            _mockRepository.Verify(r => r.AddAsync(It.IsAny<TransactionValidation>()), Times.Once);
             
-            Assert.NotNull(capturedValidation);
-            Assert.Equal(_transactionExternalId, capturedValidation.TransactionExternalId);
-            Assert.Equal(_sourceAccountId, capturedValidation.SourceAccountId);
-            Assert.Equal(5000, capturedValidation.TransactionAmount);
-            Assert.Equal(ValidationResult.Rejected, capturedValidation.Result);
-            
-            // Debe tomar la primera regla que rechazó (ExceedsMaximumAmount)
-            Assert.Equal(RejectionReason.ExceedsMaximumAmount, capturedValidation.RejectionReason);
-            Assert.Contains("Monto excede", capturedValidation.Notes);
-        }
-
-        [Fact]
-        public async Task ValidateTransactionAsync_WhenRepositoryThrowsException_ShouldPropagateException()
-        {
-            // Arrange
-            var transactionData = new TransactionData
-            {
-                TransactionExternalId = _transactionExternalId,
-                SourceAccountId = _sourceAccountId,
-                Value = 1000,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            // Configurar las reglas para aprobar la transacción
-            _mockRuleService1.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateApproved(_transactionExternalId));
-
-            _mockRuleService2.Setup(r => r.ValidateAsync(It.IsAny<TransactionData>()))
-                .ReturnsAsync(ValidationResponse.CreateApproved(_transactionExternalId));
-
-            // Configurar el repositorio para lanzar una excepción
-            _mockRepository.Setup(r => r.AddAsync(It.IsAny<TransactionValidation>()))
-                .ThrowsAsync(new InvalidOperationException("Error de base de datos simulado"));
+            _mockEventPort.Setup(e => e.sendValidationResponseAsync(It.IsAny<ValidationResponse>()))
+                .ThrowsAsync(new Exception("Connection error"));
 
             // Act & Assert
-            await Assert.ThrowsAsync<InvalidOperationException>(() => 
-                _antiFraudDomainService.ValidateTransactionAsync(transactionData));
+            await Assert.ThrowsAsync<Exception>(() => _service.ValidateTransactionAsync(transaction));
+            
+            // Verify the validation was still saved
+            _mockRepository.Verify(r => r.addAsync(It.IsAny<TransactionValidation>()), Times.Once);
         }
     }
 } 

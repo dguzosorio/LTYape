@@ -37,13 +37,16 @@ namespace TransactionService.Infrastructure.Persistence
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.TransactionExternalId)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasColumnType("uniqueidentifier");
 
                 entity.Property(e => e.SourceAccountId)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasColumnType("uniqueidentifier");
 
                 entity.Property(e => e.TargetAccountId)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasColumnType("uniqueidentifier");
 
                 entity.Property(e => e.TransferTypeId)
                     .IsRequired();

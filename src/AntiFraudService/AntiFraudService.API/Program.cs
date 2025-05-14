@@ -1,12 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Application.Services;
-using AntiFraudService.Domain.Repositories;
+using AntiFraudService.Domain.Ports;
 using AntiFraudService.Domain.Services;
 using AntiFraudService.Infrastructure.Kafka;
 using AntiFraudService.Infrastructure.Persistence;
 using AntiFraudService.Infrastructure.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using FluentValidation.AspNetCore;
+using FluentValidation;
+using AntiFraudService.Application.Validators;
+using AntiFraudService.Application.DTOs;
+using AntiFraudService.Domain.Validators;
+using AntiFraudService.Domain.Models;
 
 namespace AntiFraudService.API;
 
@@ -17,8 +23,17 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
 
         // Add services to the container.
-        builder.Services.AddControllers();
+        builder.Services.AddControllers()
+            .AddFluentValidation(fv => 
+            {
+                fv.ImplicitlyValidateChildProperties = true;
+                fv.DisableDataAnnotationsValidation = true;
+            });
 
+        // Registrar validadores de FluentValidation
+        builder.Services.AddScoped<IValidator<AntiFraudService.Application.DTOs.TransactionValidationRequest>, TransactionValidationRequestValidator>();
+        builder.Services.AddScoped<IValidator<AntiFraudService.Domain.Models.TransactionData>, TransactionDataValidator>();
+        
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options =>
@@ -31,14 +46,13 @@ public class Program
 
         // Register domain services
         builder.Services.AddScoped<IAntiFraudDomainService, AntiFraudDomainService>();
-        builder.Services.AddScoped<ITransactionService, KafkaTransactionService>();
-
-        // Register validation rules
         builder.Services.AddScoped<IValidationRuleService, MaximumAmountValidationService>();
         builder.Services.AddScoped<IValidationRuleService, DailyLimitValidationService>();
 
-        // Register repositories
-        builder.Services.AddScoped<ITransactionValidationRepository, TransactionValidationRepository>();
+        // Register ports and adapters (hexagonal architecture)
+        builder.Services.AddScoped<ITransactionEventPort, KafkaTransactionEventService>();
+        builder.Services.AddScoped<ITransactionEventConsumerPort, KafkaTransactionEventConsumerService>();
+        builder.Services.AddScoped<ITransactionValidationRepositoryPort, TransactionValidationRepositoryAdapter>();
 
         // Configure database
         builder.Services.AddDbContext<AntiFraudDbContext>(options =>

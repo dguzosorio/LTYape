@@ -11,34 +11,105 @@ This solution consists of two main microservices:
 
 The services communicate through Kafka messaging for asynchronous processing. Each service has its own database for storing domain-specific data.
 
-### Architecture Diagram
+### Hexagonal Architecture (Ports and Adapters)
+
+The solution implements the Hexagonal Architecture (also known as Ports and Adapters) pattern, which:
+
+- Places the domain model at the center
+- Defines ports (interfaces) through which the domain interacts with external systems
+- Implements adapters for specific technologies that satisfy these ports
+- Isolates business logic from infrastructure concerns
+
+#### Key Components:
+
+1. **Domain**: Contains entities, value objects, and domain services that implement core business logic
+2. **Ports**: Interfaces that define how the domain interacts with the outside world
+   - **Inbound Ports**: Define operations that can be performed by the outside world on the domain
+   - **Outbound Ports**: Define operations that the domain performs on external systems
+3. **Adapters**: Implementations of ports using specific technologies
+   - **Primary Adapters**: Convert external requests into calls to the domain (e.g., API controllers)
+   - **Secondary Adapters**: Connect the domain to external systems (e.g., databases, messaging)
+
+#### Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Clients / Frontend                            │
-└───────────────────────────────────┬─────────────────────────────────────┘
-                                    │
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                                                                           │
-│  ┌────────────────────────────┐              ┌────────────────────────┐   │
-│  │                            │              │                        │   │
-│  │     TransactionService     │◄────────────►│    AntiFraudService    │   │
-│  │                            │     Kafka    │                        │   │
-│  └─────────────┬──────────────┘              └────────────┬───────────┘   │
-│                │                                          │               │
-│                │                                          │               │
-│                │                                          │               │
-│                ▼                                          ▼               │
-│   ┌─────────────────────────┐                ┌─────────────────────────┐  │
-│   │                         │                │                         │  │
-│   │       SQL Server        │◄──────────────►│       SQL Server        │  │
-│   │  (TransactionDB)        │                │    (AntiFraudDB)        │  │
-│   │                         │                │                         │  │
-│   └─────────────────────────┘                └─────────────────────────┘  │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                  │
+│  ┌─────────────────────────────────────┐                ┌─────────────────────────────────────┐  │
+│  │       TransactionService            │                │         AntiFraudService            │  │
+│  │                                     │                │                                     │  │
+│  │  ┌─────────────────────────┐        │                │  ┌─────────────────────────┐        │  │
+│  │  │     API Layer           │        │                │  │     API Layer           │        │  │
+│  │  │  ┌──────────────────┐   │        │                │  │  ┌──────────────────┐   │        │  │
+│  │  │  │ Primary Adapters │   │        │                │  │  │ Primary Adapters │   │        │  │
+│  │  │  │  (Controllers)   │   │        │                │  │  │  (Controllers)   │   │        │  │
+│  │  │  └────────┬─────────┘   │        │                │  │  └────────┬─────────┘   │        │  │
+│  │  └───────────┼─────────────┘        │                │  └───────────┼─────────────┘        │  │
+│  │              │                      │                │              │                      │  │
+│  │  ┌───────────▼────────────┐         │                │  ┌───────────▼────────────┐         │  │
+│  │  │   Application Layer    │         │                │  │   Application Layer    │         │  │
+│  │  │  ┌─────────────────┐   │         │                │  │  ┌─────────────────┐   │         │  │
+│  │  │  │   Application   │   │         │                │  │  │   Application   │   │         │  │
+│  │  │  │    Services     │   │         │                │  │  │    Services     │   │         │  │
+│  │  │  └────────┬────────┘   │         │                │  │  └────────┬────────┘   │         │  │
+│  │  └───────────┼────────────┘         │                │  └───────────┼────────────┘         │  │
+│  │              │                      │                │              │                      │  │
+│  │  ┌───────────▼────────────┐         │                │  ┌───────────▼────────────┐         │  │
+│  │  │     Domain Layer       │         │                │  │     Domain Layer       │         │  │
+│  │  │  ┌─────────────────┐   │         │                │  │  ┌─────────────────┐   │         │  │
+│  │  │  │  Domain Model   │   │         │                │  │  │  Domain Model   │   │         │  │
+│  │  │  │    Entities     │   │         │                │  │  │    Entities     │   │         │  │
+│  │  │  │   Services      │   │         │                │  │  │   Services      │   │         │  │
+│  │  │  └────────┬────────┘   │         │                │  │  └────────┬────────┘   │         │  │
+│  │  │           │            │         │                │  │           │            │         │  │
+│  │  │  ┌────────▼────────┐   │         │                │  │  ┌────────▼────────┐   │         │  │
+│  │  │  │      Ports      │   │         │                │  │  │      Ports      │   │         │  │
+│  │  │  │ ┌──────────────┐│   │         │                │  │  │ ┌──────────────┐│   │         │  │
+│  │  │  │ │ITransactionRe││   │         │                │  │  │ │ITransactionVa││   │         │  │
+│  │  │  │ │positoryPort  ││   │         │                │  │  │ │lidationRepo- ││   │         │  │
+│  │  │  │ └──────────────┘│   │         │                │  │  │ │sitoryPort    ││   │         │  │
+│  │  │  │ ┌──────────────┐│   │         │                │  │  │ └──────────────┘│   │         │  │
+│  │  │  │ │IAntiFraudEven││   │         │                │  │  │ ┌──────────────┐│   │         │  │
+│  │  │  │ │tPort         ││   │         │                │  │  │ │ITransactionEv││   │         │  │
+│  │  │  │ └──────────────┘│   │         │                │  │  │ │entPort       ││   │         │  │
+│  │  │  └────────┬────────┘   │         │                │  │  │ └──────────────┘│   │         │  │
+│  │  └───────────┼────────────┘         │                │  │  └────────┬────────┘   │         │  │
+│  │              │                      │                │  └───────────┼────────────┘         │  │
+│  │  ┌───────────▼────────────┐         │                │  ┌───────────▼─────────────┐        │  │
+│  │  │  Infrastructure Layer  │         │                │  │  Infrastructure Layer   │        │  │
+│  │  │  ┌──────────────────┐  │         │                │  │  ┌──────────────────┐   │        │  │
+│  │  │  │Secondary Adapters│  │         │                │  │  │Secondary Adapters│   │        │  │
+│  │  │  │ ┌──────────────┐ │  │         │                │  │  │ ┌──────────────┐ │   │        │  │
+│  │  │  │ │TransactionRep│ │  │         │                │  │  │ │TransactionVal│ │   │        │  │
+│  │  │  │ │ositoryAdapter│ │  │         │                │  │  │ │idationReposi-│ │   │        │  │
+│  │  │  │ └──────────────┘ │  │         │                │  │  │ │toryAdapter   │ │   │        │  │
+│  │  │  │ ┌──────────────┐ │  │         │                │  │  │ └──────────────┘ │   │        │  │
+│  │  │  │ │KafkaAntiFraud│ │  │         │                │  │  │ ┌───────────────┐│   │        │  │
+│  │  │  │ │Service       │ │  │         │                │  │  │ │KafkaTransacti ││   │        │  │
+│  │  │  │ └──────────────┘ │  │         │                │  │  │ │onEventService ││   │        │  │
+│  │  │  └─────────┬─────── ┘  │         │                │  │  │ └───────────────┘│   │        │  │
+│  │  └────────────┼───────────┘         │                │  │  └─────────┬────────┘   │        │  │
+│  │               │                     │                │  └────────────┼────────────┘        │  │
+│  │               │                     │                │               │                     │  │
+│  │               │                     │                │               │                     │  │
+│  │               ▼                     │                │               ▼                     │  │
+│  │    ◄────────────── Kafka Messaging ─────────────────────────────────────────────────►      │  │
+│  │                                     │                │                                     │  │
+│  │  ┌────────────▼──────────┐          │                │  ┌────────────▼──────────┐          │  │
+│  │  │     SQL Database      │          │                │  │     SQL Database      │          │  │
+│  │  │                       │          │                │  │                       │          │  │
+│  │  │    TransactionDb      │          │                │  │     AntiFraudDb       │          │  │
+│  │  └───────────────────────┘          │                │  └───────────────────────┘          │  │
+│  └─────────────────────────────────────┘                └─────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Benefits of Hexagonal Architecture
+
+1. **Domain Independence**: Domain logic doesn't depend on infrastructure.
+2. **Testability**: Easy to test business rules in isolation.
+3. **Flexibility**: Freedom to swap infrastructure components without changing business logic.
+4. **Separation of Concerns**: Each component has a single responsibility.
 
 ### Communication Flow
 
@@ -67,13 +138,13 @@ When running with Docker Compose, the services are available at:
 ### Transaction Service
 
 #### Create Transaction
-- **URL**: `POST http://localhost:5001/api/transactions`
+- **URL**: `POST http://localhost:5001/api/transactions/set`
 - **Description**: Creates a new financial transaction
 - **Request Body**: JSON with transaction details
 - **Response**: Transaction details with a 201 Created status
 
 #### Get Transaction
-- **URL**: `GET http://localhost:5001/api/transactions`
+- **URL**: `POST http://localhost:5001/api/transactions/get`
 - **Description**: Retrieves details of a specific transaction
 - **Request Body**: 
 ```json
@@ -176,6 +247,51 @@ The `transferTypeId` field specifies the type of transfer:
    docker-compose down
    ```
 
+## Project Structure
+
+The solution follows a hexagonal architecture approach:
+
+### TransactionService
+- **API Layer**: Controllers (primary adapters) that receive external requests
+- **Application Layer**: Application services that orchestrate use cases
+- **Domain Layer**: 
+  - **Core**: Entities, value objects, domain services that encapsulate business rules
+  - **Ports**: Interfaces defining how the domain interacts with external systems
+- **Infrastructure Layer**: Secondary adapters implementing ports for specific technologies
+  - Database repositories
+  - Kafka messaging
+  - External service clients
+
+### AntiFraudService
+- **API Layer**: Controllers (primary adapters)
+- **Application Layer**: Application services for fraud validation
+- **Domain Layer**: 
+  - **Core**: Validation rules, entities, and domain services
+  - **Ports**: Repository and messaging interfaces
+- **Infrastructure Layer**: Concrete implementations for database access and Kafka communication
+
+## Key Ports and Adapters
+
+### TransactionService
+- **Ports** (interfaces):
+  - `ITransactionRepositoryPort`: Interface for transaction persistence operations
+  - `IAntiFraudEventPort`: Interface for sending transactions to Anti-Fraud service
+
+- **Adapters** (implementations):
+  - `TransactionRepositoryAdapter`: EF Core implementation of the transaction repository port
+  - `KafkaAntiFraudService`: Kafka implementation of the anti-fraud event port
+
+### AntiFraudService
+- **Ports** (interfaces):
+  - `ITransactionEventPort`: Interface for sending validation responses
+  - `ITransactionEventConsumerPort`: Interface for consuming transaction events
+  - `ITransactionValidationRepositoryPort`: Interface for validation repository operations
+
+- **Adapters** (implementations):
+  - `KafkaTransactionEventService`: Kafka implementation for sending validation responses
+  - `KafkaTransactionEventConsumerService`: Kafka implementation for consuming transaction events
+  - `TransactionValidationRepositoryAdapter`: EF Core implementation of the validation repository port
+
 ## Database Connection
 
 ### SQL Server Details
@@ -200,8 +316,7 @@ The `transferTypeId` field specifies the type of transfer:
 - **SQL Server**: Relational database
 - **Kafka**: Messaging system for microservices communication
 - **Docker/Docker Compose**: For containerization and service orchestration
-
-
+- **Entity Framework Core**: For database access
 
 ## Troubleshooting
 
@@ -212,13 +327,4 @@ If you encounter issues connecting to Kafka, check:
 
 ### Database Issues
 1. Ensure the SQL Server container is running: `docker ps | grep sqlserver`
-2. Check the logs for database errors: `docker logs sqlserver`
-
-## Project Structure
-
-The solution follows a clean architecture approach:
-
-- **API Layer**: Controllers and configuration
-- **Application Layer**: Application services and DTOs
-- **Domain Layer**: Entities, repositories interfaces, and domain services
-- **Infrastructure Layer**: Implementations of repositories, external services, and database contexts 
+2. Check the logs for database errors: `docker logs sqlserver` 

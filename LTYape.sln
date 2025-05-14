@@ -1,5 +1,4 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -24,12 +23,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AntiFraudService.Application", "src\AntiFraudService\AntiFraudService.Application\AntiFraudService.Application.csproj", "{634953A9-2054-4BA9-876E-3CB0E4254003}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AntiFraudService.Infrastructure", "src\AntiFraudService\AntiFraudService.Infrastructure\AntiFraudService.Infrastructure.csproj", "{F05DFD09-0D94-4597-9277-32C7062F15FB}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{C8E42992-5E42-0C2B-DBFE-AA848D06431C}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Domain", "src\Shared\Shared.Domain\Shared.Domain.csproj", "{B632ECA1-AB00-46FA-824D-0B28E1C46A19}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Infrastructure", "src\Shared\Shared.Infrastructure\Shared.Infrastructure.csproj", "{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -137,30 +130,6 @@ Global
 		{F05DFD09-0D94-4597-9277-32C7062F15FB}.Release|x64.Build.0 = Release|Any CPU
 		{F05DFD09-0D94-4597-9277-32C7062F15FB}.Release|x86.ActiveCfg = Release|Any CPU
 		{F05DFD09-0D94-4597-9277-32C7062F15FB}.Release|x86.Build.0 = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|x64.Build.0 = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Debug|x86.Build.0 = Debug|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|x64.ActiveCfg = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|x64.Build.0 = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|x86.ActiveCfg = Release|Any CPU
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19}.Release|x86.Build.0 = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|x64.Build.0 = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Debug|x86.Build.0 = Debug|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|x64.ActiveCfg = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|x64.Build.0 = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|x86.ActiveCfg = Release|Any CPU
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -176,8 +145,5 @@ Global
 		{0C986B60-8B00-4792-8C36-86A1A6F3E79F} = {B315A3E3-07E5-0FA6-B0FC-7330E7978CDB}
 		{634953A9-2054-4BA9-876E-3CB0E4254003} = {B315A3E3-07E5-0FA6-B0FC-7330E7978CDB}
 		{F05DFD09-0D94-4597-9277-32C7062F15FB} = {B315A3E3-07E5-0FA6-B0FC-7330E7978CDB}
-		{C8E42992-5E42-0C2B-DBFE-AA848D06431C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{B632ECA1-AB00-46FA-824D-0B28E1C46A19} = {C8E42992-5E42-0C2B-DBFE-AA848D06431C}
-		{A6C5A0CB-76C0-4BEE-9B5E-5253FFEA39EA} = {C8E42992-5E42-0C2B-DBFE-AA848D06431C}
 	EndGlobalSection
 EndGlobal

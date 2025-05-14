@@ -1,7 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using TransactionService.Application.DTOs;
+using TransactionService.Application.Exceptions;
+using TransactionService.Domain.Enums;
 using TransactionService.Domain.Services;
+using FluentValidation;
 
 namespace TransactionService.Application.Services
 {
@@ -11,14 +14,23 @@ namespace TransactionService.Application.Services
     public class TransactionApplicationService : ITransactionApplicationService
     {
         private readonly ITransactionDomainService _transactionDomainService;
+        private readonly IValidator<CreateTransactionRequest> _createTransactionValidator;
+        private readonly IValidator<GetTransactionRequest> _getTransactionValidator;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TransactionApplicationService"/> class
         /// </summary>
         /// <param name="transactionDomainService">The transaction domain service</param>
-        public TransactionApplicationService(ITransactionDomainService transactionDomainService)
+        /// <param name="createTransactionValidator">Validator for transaction creation requests</param>
+        /// <param name="getTransactionValidator">Validator for transaction retrieval requests</param>
+        public TransactionApplicationService(
+            ITransactionDomainService transactionDomainService,
+            IValidator<CreateTransactionRequest> createTransactionValidator,
+            IValidator<GetTransactionRequest> getTransactionValidator)
         {
             _transactionDomainService = transactionDomainService;
+            _createTransactionValidator = createTransactionValidator;
+            _getTransactionValidator = getTransactionValidator;
         }
 
         /// <summary>
@@ -28,6 +40,15 @@ namespace TransactionService.Application.Services
         /// <returns>The created transaction information</returns>
         public async Task<TransactionResponse> CreateTransactionAsync(CreateTransactionRequest request)
         {
+            // Validate request data using FluentValidation
+            await _createTransactionValidator.ValidateAndThrowAsync(request);
+
+            // Validate transfer type using Enum.IsDefined (domain-specific rule)
+            if (!Enum.IsDefined(typeof(TransferType), request.TransferTypeId))
+            {
+                throw new InvalidRequestException($"Invalid transfer type. Valid types are: {string.Join(", ", Enum.GetNames(typeof(TransferType)))}");
+            }
+
             var transaction = await _transactionDomainService.CreateTransactionAsync(
                 request.SourceAccountId,
                 request.TargetAccountId,
@@ -44,6 +65,9 @@ namespace TransactionService.Application.Services
         /// <returns>The transaction information if found, or null if not found</returns>
         public async Task<TransactionResponse?> GetTransactionAsync(GetTransactionRequest request)
         {
+            // Validate request data using FluentValidation
+            await _getTransactionValidator.ValidateAndThrowAsync(request);
+
             var transaction = await _transactionDomainService.GetTransactionByExternalIdAndDateAsync(
                 request.TransactionExternalId,
                 request.CreatedAt ?? DateTime.UtcNow);
