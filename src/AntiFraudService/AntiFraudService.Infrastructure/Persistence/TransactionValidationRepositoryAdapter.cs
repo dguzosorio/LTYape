@@ -1,16 +1,12 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using AntiFraudService.Domain.Entities;
 using AntiFraudService.Domain.Ports;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
 
 namespace AntiFraudService.Infrastructure.Persistence
 {
     /// <summary>
-    /// Adaptador de repositorio de validación de transacciones utilizando Entity Framework Core
+    /// Transaction validation repository adapter using Entity Framework Core
     /// </summary>
     public class TransactionValidationRepositoryAdapter : ITransactionValidationRepositoryPort
     {
@@ -18,94 +14,124 @@ namespace AntiFraudService.Infrastructure.Persistence
         private readonly ILogger<TransactionValidationRepositoryAdapter> _logger;
 
         /// <summary>
-        /// Inicializa una nueva instancia de la clase <see cref="TransactionValidationRepositoryAdapter"/>
+        /// Initializes a new instance of the <see cref="TransactionValidationRepositoryAdapter"/> class
         /// </summary>
-        /// <param name="dbContext">El contexto de base de datos</param>
-        /// <param name="logger">El logger</param>
+        /// <param name="dbContext">The database context</param>
+        /// <param name="logger">The logger</param>
         public TransactionValidationRepositoryAdapter(
             AntiFraudDbContext dbContext,
-            ILogger<TransactionValidationRepositoryAdapter> logger)
+            ILogger<TransactionValidationRepositoryAdapter> logger
+        )
         {
             _dbContext = dbContext;
             _logger = logger;
         }
 
         /// <summary>
-        /// Recupera una validación de transacción por el identificador externo de la transacción
+        /// Retrieves a transaction validation by the transaction's external identifier
         /// </summary>
-        /// <param name="transactionExternalId">ID externo de la transacción</param>
-        /// <returns>La validación de transacción si se encuentra, o null si no se encuentra</returns>
+        /// <param name="transactionExternalId">External ID of the transaction</param>
+        /// <returns>The transaction validation if found, or null if not found</returns>
         public async Task<TransactionValidation> getByTransactionExternalIdAsync(Guid transactionExternalId)
-        {
-            var validation = await _dbContext.TransactionValidations
-                .FirstOrDefaultAsync(v => v.TransactionExternalId == transactionExternalId);
-                
-            if (validation == null)
-            {
-                throw new KeyNotFoundException($"No se encontró la validación para la transacción {transactionExternalId}");
-            }
-            
-            return validation;
-        }
-
-        /// <summary>
-        /// Añade una nueva validación de transacción al repositorio
-        /// </summary>
-        /// <param name="validation">La validación de transacción a añadir</param>
-        public async Task addAsync(TransactionValidation validation)
         {
             try
             {
-                // Verificar si la transacción ya existe para evitar duplicados
-                var existingValidation = await _dbContext.TransactionValidations
-                    .FirstOrDefaultAsync(v => v.TransactionExternalId == validation.TransactionExternalId);
+                var validation = await _dbContext.TransactionValidations
+                    .FirstOrDefaultAsync(v => v.TransactionExternalId == transactionExternalId);
                 
-                if (existingValidation != null)
+                if (validation == null)
                 {
                     _logger.LogWarning(
-                        "Se recibió un intento de validación duplicado para la transacción {TransactionId}. Esta validación será ignorada.",
-                        validation.TransactionExternalId);
-                    return; // No hacer nada si la validación ya existe
+                        "Validation not found for transaction {TransactionId}",
+                        transactionExternalId
+                    );
+                    throw new KeyNotFoundException($"Validation not found for transaction {transactionExternalId}");
                 }
                 
-                await _dbContext.TransactionValidations.AddAsync(validation);
-                await _dbContext.SaveChangesAsync();
-                
-                _logger.LogInformation(
-                    "Validación de transacción {TransactionId} almacenada exitosamente con resultado {Result}",
-                    validation.TransactionExternalId, validation.Result);
+                return validation;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!(ex is KeyNotFoundException))
             {
                 _logger.LogError(
                     ex,
-                    "Error al guardar la validación de transacción {TransactionId}: {ErrorMessage}",
-                    validation.TransactionExternalId, ex.Message);
+                    "Error retrieving validation for transaction {TransactionId}: {ErrorMessage}",
+                    transactionExternalId,
+                    ex.Message
+                );
                 throw;
             }
         }
 
         /// <summary>
-        /// Calcula el monto total de transacciones para una cuenta específica en una fecha específica
+        /// Adds a new transaction validation to the repository
         /// </summary>
-        /// <param name="sourceAccountId">El identificador de la cuenta</param>
-        /// <param name="date">La fecha para la cual calcular el total</param>
-        /// <returns>La suma de todos los montos de transacciones para la cuenta en la fecha especificada</returns>
-        public async Task<decimal> getDailyTransactionAmountForAccountAsync(Guid sourceAccountId, DateTime date)
+        /// <param name="validation">The transaction validation to add</param>
+        public async Task addAsync(TransactionValidation validation)
         {
-            // Obtener inicio y fin del día
+            try
+            {
+                // Check if the transaction already exists to avoid duplicates
+                var existingValidation =
+                    await _dbContext.TransactionValidations.FirstOrDefaultAsync(v =>
+                        v.TransactionExternalId == validation.TransactionExternalId
+                    );
+
+                if (existingValidation != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate validation attempt received for transaction {TransactionId}. This validation will be ignored.",
+                        validation.TransactionExternalId
+                    );
+                    return; // Do nothing if the validation already exists
+                }
+
+                await _dbContext.TransactionValidations.AddAsync(validation);
+                await _dbContext.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Transaction validation {TransactionId} successfully stored with result {Result}",
+                    validation.TransactionExternalId,
+                    validation.Result
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error saving transaction validation {TransactionId}: {ErrorMessage}",
+                    validation.TransactionExternalId,
+                    ex.Message
+                );
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Calculates the total transaction amount for a specific account on a specific date
+        /// </summary>
+        /// <param name="sourceAccountId">The account identifier</param>
+        /// <param name="date">The date for which to calculate the total</param>
+        /// <returns>The sum of all transaction amounts for the account on the specified date</returns>
+        public async Task<decimal> getDailyTransactionAmountForAccountAsync(
+            Guid sourceAccountId,
+            DateTime date
+        )
+        {
+            // Get start and end of day
             var startOfDay = date.Date;
             var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
 
-            // Consultar transacciones aprobadas para esta cuenta en la fecha especificada
-            var dailyTotal = await _dbContext.TransactionValidations
-                .Where(t => t.SourceAccountId == sourceAccountId &&
-                            t.ValidationDate >= startOfDay &&
-                            t.ValidationDate <= endOfDay &&
-                            t.Result == Domain.Enums.ValidationResult.Approved)
+            // Query approved transactions for this account in the specified date
+            var dailyTotal = await _dbContext
+                .TransactionValidations.Where(t =>
+                    t.SourceAccountId == sourceAccountId
+                    && t.ValidationDate >= startOfDay
+                    && t.ValidationDate <= endOfDay
+                    && t.Result == Domain.Enums.ValidationResult.Approved
+                )
                 .SumAsync(t => t.TransactionAmount);
 
             return dailyTotal;
         }
     }
-} 
+}

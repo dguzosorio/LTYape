@@ -33,11 +33,9 @@ namespace TransactionService.Domain.Services
         /// <param name="transferTypeId">The type of transfer</param>
         /// <param name="value">The monetary value of the transaction</param>
         /// <returns>The created transaction</returns>
-        /// <exception cref="TransactionDomainException">Thrown when the transaction value is invalid</exception>
         public async Task<Transaction> CreateTransactionAsync(Guid sourceAccountId, Guid targetAccountId, int transferTypeId, decimal value)
         {
-            if (value <= 0)
-                throw new TransactionDomainException("Transaction value must be greater than zero");
+            // Value validation is now handled by FluentValidation in the application layer
 
             var transaction = new Transaction(
                 Guid.NewGuid(),
@@ -51,14 +49,6 @@ namespace TransactionService.Domain.Services
             
             return transaction;
         }
-
-        /// <summary>
-        /// Retrieves a transaction by its external identifier
-        /// </summary>
-        /// <param name="externalId">The external identifier of the transaction</param>
-        /// <returns>The transaction if found, or null if not found</returns>
-        public async Task<Transaction?> GetTransactionByExternalIdAsync(Guid externalId) =>
-            await _transactionRepository.getByExternalIdAndDateAsync(externalId, DateTime.UtcNow);
 
         /// <summary>
         /// Retrieves a transaction by its external identifier and creation date

@@ -7,6 +7,12 @@ using AntiFraudService.Infrastructure.Persistence;
 using AntiFraudService.Infrastructure.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using FluentValidation.AspNetCore;
+using FluentValidation;
+using AntiFraudService.Application.Validators;
+using AntiFraudService.Application.DTOs;
+using AntiFraudService.Domain.Validators;
+using AntiFraudService.Domain.Models;
 
 namespace AntiFraudService.API;
 
@@ -17,8 +23,17 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
 
         // Add services to the container.
-        builder.Services.AddControllers();
+        builder.Services.AddControllers()
+            .AddFluentValidation(fv => 
+            {
+                fv.ImplicitlyValidateChildProperties = true;
+                fv.DisableDataAnnotationsValidation = true;
+            });
 
+        // Registrar validadores de FluentValidation
+        builder.Services.AddScoped<IValidator<AntiFraudService.Application.DTOs.TransactionValidationRequest>, TransactionValidationRequestValidator>();
+        builder.Services.AddScoped<IValidator<AntiFraudService.Domain.Models.TransactionData>, TransactionDataValidator>();
+        
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options =>

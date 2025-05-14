@@ -88,8 +88,16 @@ namespace AntiFraudService.Infrastructure.Kafka
                 return;
             }
             
-            _logger.LogInformation("Validation request received for transaction: {TransactionId}, Amount: {Amount}, Source account: {SourceAccount}", 
-                message.TransactionExternalId, message.Value, message.SourceAccountId);
+            // Validación usando un único método y retornando temprano en caso de error
+            if (!IsValidTransactionMessage(message, out string validationError))
+            {
+                _logger.LogWarning("Invalid transaction data received: {Reason}, TransactionId: {TransactionId}", 
+                    validationError, message.TransactionExternalId);
+                return;
+            }
+            
+            _logger.LogInformation("Validation request received for transaction: {TransactionId}, Amount: {Amount}, From: {SourceAccount} To: {TargetAccount}", 
+                message.TransactionExternalId, message.Value, message.SourceAccountId, message.TargetAccountId);
             
             try
             {
@@ -128,6 +136,38 @@ namespace AntiFraudService.Infrastructure.Kafka
                 
                 // Consider whether to retry or notify a monitoring system
             }
+        }
+
+        /// <summary>
+        /// Verifica si un mensaje de transacción es válido
+        /// </summary>
+        /// <param name="message">El mensaje a validar</param>
+        /// <param name="validationError">Mensaje de error de validación si falla</param>
+        /// <returns>True si el mensaje es válido, False en caso contrario</returns>
+        private bool IsValidTransactionMessage(TransactionValidationRequestMessage message, out string validationError)
+        {
+            // Uso pattern matching para validación más elegante
+            validationError = message switch
+            {
+                { TransactionExternalId: Guid guid } when guid == Guid.Empty 
+                    => "Transaction external ID is empty",
+                    
+                { SourceAccountId: Guid guid } when guid == Guid.Empty 
+                    => "Source account ID is empty",
+                    
+                { TargetAccountId: Guid guid } when guid == Guid.Empty 
+                    => "Target account ID is empty",
+                    
+                { Value: decimal value } when value <= 0 
+                    => "Transaction value must be greater than zero",
+                    
+                { CreatedAt: DateTime date } when date == default || date > DateTime.UtcNow 
+                    => "Creation date is invalid or in the future",
+                    
+                _ => string.Empty // Sin error
+            };
+            
+            return string.IsNullOrEmpty(validationError);
         }
         
         /// <summary>

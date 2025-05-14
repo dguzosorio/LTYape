@@ -16,7 +16,7 @@ namespace AntiFraudService.Application.Services
         /// <param name="request">The transaction validation request</param>
         /// <returns>A task representing the asynchronous operation</returns>
         Task ProcessTransactionValidationRequestAsync(TransactionValidationRequest request);
-
+        
         /// <summary>
         /// Validates a transaction against fraud rules
         /// </summary>
@@ -30,5 +30,13 @@ namespace AntiFraudService.Application.Services
             Guid sourceAccountId,
             decimal value,
             DateTime createdAt);
+            
+        /// <summary>
+        /// Retrieves an existing transaction validation
+        /// </summary>
+        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <returns>The transaction validation if found, null otherwise</returns>
+        /// <remarks>This method is used to check for duplicate validations</remarks>
+        Task<TransactionValidation> GetTransactionValidationAsync(Guid transactionExternalId);
     }
 } 

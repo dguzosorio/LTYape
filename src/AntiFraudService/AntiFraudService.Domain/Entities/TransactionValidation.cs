@@ -49,7 +49,10 @@ namespace AntiFraudService.Domain.Entities
         public string? Notes { get; private set; }
 
         // For EF Core
-        private TransactionValidation() { }
+        private TransactionValidation() 
+        { 
+            Id = 0; // Initialize with 0 for EF Core
+        }
 
         /// <summary>
         /// Creates a new transaction validation with the specified details
@@ -68,6 +71,7 @@ namespace AntiFraudService.Domain.Entities
             RejectionReason rejectionReason = RejectionReason.None,
             string? notes = null)
         {
+            Id = 0; // Initialize with 0 for EF Core
             TransactionExternalId = transactionExternalId;
             SourceAccountId = sourceAccountId;
             TransactionAmount = transactionAmount;
@@ -91,13 +95,18 @@ namespace AntiFraudService.Domain.Entities
             Guid sourceAccountId,
             decimal transactionAmount)
         {
-            return new TransactionValidation(
+            var validation = new TransactionValidation(
                 transactionExternalId,
                 sourceAccountId,
                 transactionAmount,
                 ValidationResult.Approved,
                 RejectionReason.None,
                 "Transaction approved");
+            
+            // Generate a string ID if the DB uses string IDs
+            validation.Id = 0;
+            
+            return validation;
         }
 
         /// <summary>
@@ -116,13 +125,18 @@ namespace AntiFraudService.Domain.Entities
             RejectionReason reason,
             string? notes = null)
         {
-            return new TransactionValidation(
+            var validation = new TransactionValidation(
                 transactionExternalId,
                 sourceAccountId,
                 transactionAmount,
                 ValidationResult.Rejected,
                 reason,
                 notes ?? $"Transaction rejected: {reason}");
+            
+            // Generate a string ID if the DB uses string IDs
+            validation.Id = 0;
+            
+            return validation;
         }
     }
 } 

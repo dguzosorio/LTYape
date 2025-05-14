@@ -34,12 +34,18 @@ namespace AntiFraudService.Infrastructure.Persistence
                 entity.ToTable("TransactionValidations");
 
                 entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Id)
+                    .IsRequired()
+                    .ValueGeneratedOnAdd();
 
                 entity.Property(e => e.TransactionExternalId)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasColumnType("uniqueidentifier");
 
                 entity.Property(e => e.SourceAccountId)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasColumnType("uniqueidentifier");
 
                 entity.Property(e => e.TransactionAmount)
                     .IsRequired()

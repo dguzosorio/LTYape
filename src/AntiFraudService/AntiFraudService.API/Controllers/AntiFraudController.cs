@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using AntiFraudService.Application.DTOs;
 using AntiFraudService.Application.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
@@ -37,50 +39,84 @@ namespace AntiFraudService.API.Controllers
         /// Processes a transaction validation request and performs fraud checks.
         /// </summary>
         /// <param name="request">The transaction validation request containing transaction details.</param>
-        /// <returns>No content (204) if the validation was processed successfully.</returns>
+        /// <returns>
+        /// - 204 No Content if the validation was processed successfully.
+        /// - 409 Conflict if the transaction was already validated.
+        /// - 400 Bad Request if the validation request is invalid.
+        /// - 500 Internal Server Error if an unexpected error occurred.
+        /// </returns>
         /// <response code="204">The validation request was processed successfully.</response>
+        /// <response code="409">The transaction has already been validated.</response>
         /// <response code="400">The validation request was invalid.</response>
         /// <response code="500">An unexpected error occurred while processing the validation.</response>
         [HttpPost("validate")]
-        [ProducesResponseType(204)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(500)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> ValidateTransaction([FromBody] TransactionValidationRequest request)
         {
+            // La validación del modelo ahora es manejada automáticamente por FluentValidation
+            // Si el modelo no es válido, ASP.NET Core devuelve automáticamente una respuesta 400 Bad Request
+            
             try
             {
-                if (request == null || request.TransactionExternalId == Guid.Empty)
-                {
-                    _logger.LogWarning("Received invalid validation request");
-                    return BadRequest("The validation request is invalid or has an incorrect format");
-                }
-                
                 _logger.LogInformation(
-                    "Received validation request for transaction {TransactionId}", 
-                    request.TransactionExternalId);
+                    "Received validation request for transaction {TransactionId}, Amount: {Amount}, From: {SourceAccount} To: {TargetAccount}", 
+                    request.TransactionExternalId, 
+                    request.Value,
+                    request.SourceAccountId,
+                    request.TargetAccountId);
+
+                // Try to get existing validation before processing
+                try
+                {
+                    var existingValidation = await _antiFraudService.GetTransactionValidationAsync(request.TransactionExternalId);
+                    
+                    if (existingValidation != null)
+                    {
+                        _logger.LogInformation(
+                            "Transaction {TransactionId} was already validated with result: {Result}", 
+                            request.TransactionExternalId, 
+                            existingValidation.Result);
+                            
+                        return Conflict(new { 
+                            message = "Transaction has already been validated", 
+                            transactionId = request.TransactionExternalId.ToString(),
+                            result = existingValidation.Result.ToString(),
+                            validationDate = existingValidation.ValidationDate
+                        });
+                    }
+                }
+                catch (KeyNotFoundException)
+                {
+                    // Transaction has not been validated yet, continue with the process
+                }
 
                 await _antiFraudService.ProcessTransactionValidationRequestAsync(request);
                 
                 return NoContent();
             }
-            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true)
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate") == true)
             {
-                // Handle duplicate key errors specifically
-                _logger.LogWarning(
-                    "Attempted to validate a transaction that already exists: {TransactionId}. This is normal if the transaction was processed previously.",
+                // This may happen if concurrent validations are attempted
+                _logger.LogInformation(
+                    "Concurrent validation detected for transaction {TransactionId}", 
                     request.TransactionExternalId);
                 
-                // Return 204 instead of error since this is not considered a real error
-                return NoContent();
+                return Conflict(new { 
+                    message = "Transaction has already been validated by a concurrent request", 
+                    transactionId = request.TransactionExternalId.ToString()
+                });
             }
             catch (Exception ex)
             {
+                // Log the full exception
                 _logger.LogError(
                     ex, 
                     "Unexpected error processing transaction validation {TransactionId}: {ErrorMessage}",
                     request.TransactionExternalId, ex.Message);
                 
-                // Don't expose internal error details to the client, just return a generic message
                 return StatusCode(500, "An error occurred while processing the validation request");
             }
         }

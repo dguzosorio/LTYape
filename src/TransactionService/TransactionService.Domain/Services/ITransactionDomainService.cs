@@ -23,13 +23,6 @@ namespace TransactionService.Domain.Services
         Task<Transaction> CreateTransactionAsync(Guid sourceAccountId, Guid targetAccountId, int transferTypeId, decimal value);
         
         /// <summary>
-        /// Retrieves a transaction by its external identifier
-        /// </summary>
-        /// <param name="externalId">The external identifier of the transaction</param>
-        /// <returns>The transaction if found, or null if not found</returns>
-        Task<Transaction?> GetTransactionByExternalIdAsync(Guid externalId);
-
-        /// <summary>
         /// Retrieves a transaction by its external identifier and creation date
         /// </summary>
         /// <param name="externalId">The external identifier of the transaction</param>

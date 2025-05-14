@@ -5,29 +5,29 @@ using AntiFraudService.Domain.Entities;
 namespace AntiFraudService.Domain.Ports
 {
     /// <summary>
-    /// Puerto para operaciones de acceso a datos de validación de transacciones
+    /// Port for transaction validation data access operations
     /// </summary>
     public interface ITransactionValidationRepositoryPort
     {
         /// <summary>
-        /// Recupera una validación de transacción por el identificador externo de la transacción
+        /// Retrieves a transaction validation by the transaction's external identifier
         /// </summary>
-        /// <param name="transactionExternalId">ID externo de la transacción</param>
-        /// <returns>La validación de transacción si se encuentra, o null si no se encuentra</returns>
+        /// <param name="transactionExternalId">External ID of the transaction</param>
+        /// <returns>The transaction validation if found, or null if not found</returns>
         Task<TransactionValidation> getByTransactionExternalIdAsync(Guid transactionExternalId);
         
         /// <summary>
-        /// Añade una nueva validación de transacción al repositorio
+        /// Adds a new transaction validation to the repository
         /// </summary>
-        /// <param name="validation">La validación de transacción a añadir</param>
+        /// <param name="validation">The transaction validation to add</param>
         Task addAsync(TransactionValidation validation);
         
         /// <summary>
-        /// Calcula el monto total de transacciones para una cuenta específica en una fecha específica
+        /// Calculates the total transaction amount for a specific account on a specific date
         /// </summary>
-        /// <param name="sourceAccountId">El identificador de la cuenta</param>
-        /// <param name="date">La fecha para la cual calcular el total</param>
-        /// <returns>La suma de todos los montos de transacciones para la cuenta en la fecha especificada</returns>
+        /// <param name="sourceAccountId">The account identifier</param>
+        /// <param name="date">The date for which to calculate the total</param>
+        /// <returns>The sum of all transaction amounts for the account on the specified date</returns>
         Task<decimal> getDailyTransactionAmountForAccountAsync(Guid sourceAccountId, DateTime date);
     }
 } 

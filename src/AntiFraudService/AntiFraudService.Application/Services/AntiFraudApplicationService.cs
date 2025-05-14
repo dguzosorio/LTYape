@@ -45,6 +45,30 @@ namespace AntiFraudService.Application.Services
         }
 
         /// <summary>
+        /// Retrieves an existing transaction validation
+        /// </summary>
+        /// <param name="transactionExternalId">The external identifier of the transaction</param>
+        /// <returns>The transaction validation if found, null otherwise</returns>
+        public async Task<TransactionValidation> GetTransactionValidationAsync(Guid transactionExternalId)
+        {
+            try
+            {
+                return await _validationRepository.getByTransactionExternalIdAsync(transactionExternalId);
+            }
+            catch (KeyNotFoundException)
+            {
+                // Propagate the exception so the controller can handle it
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Log the error but rethrow to allow the controller to handle it
+                Console.WriteLine($"Error retrieving validation for transaction {transactionExternalId}: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Validates a transaction against fraud rules
         /// </summary>
         /// <param name="transactionExternalId">The external identifier of the transaction</param>
@@ -82,7 +106,7 @@ namespace AntiFraudService.Application.Services
                     sourceAccountId,
                     value,
                     RejectionReason.Other,
-                    "Error procesando la validación");
+                    "Error processing the validation");
                 
                 await _validationRepository.addAsync(validation);
             }
@@ -106,40 +130,6 @@ namespace AntiFraudService.Application.Services
                 Value = request.Value,
                 CreatedAt = request.CreatedAt
             };
-        }
-        
-        /// <summary>
-        /// Maps a domain transaction validation request to a transaction data domain model
-        /// </summary>
-        /// <param name="request">The domain transaction validation request</param>
-        /// <returns>The transaction data domain model</returns>
-        private static TransactionData MapToTransactionData(AntiFraudService.Domain.Models.TransactionValidationRequest request)
-        {
-            return new TransactionData
-            {
-                TransactionExternalId = request.TransactionExternalId,
-                SourceAccountId = request.SourceAccountId,
-                TargetAccountId = request.TargetAccountId,
-                TransferTypeId = request.TransferTypeId,
-                Value = request.Value,
-                CreatedAt = request.CreatedAt
-            };
-        }
-        
-        /// <summary>
-        /// Determines the domain rejection reason from a string representation
-        /// </summary>
-        /// <param name="rejectionReasonString">String representation of rejection reason</param>
-        /// <returns>Domain rejection reason enum value</returns>
-        private RejectionReason DetermineRejectionReason(string rejectionReasonString)
-        {
-            if (string.IsNullOrEmpty(rejectionReasonString))
-                return RejectionReason.None;
-                
-            if (Enum.TryParse<RejectionReason>(rejectionReasonString, true, out var reason))
-                return reason;
-                
-            return RejectionReason.Other;
         }
     }
 } 

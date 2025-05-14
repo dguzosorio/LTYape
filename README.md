@@ -138,13 +138,13 @@ When running with Docker Compose, the services are available at:
 ### Transaction Service
 
 #### Create Transaction
-- **URL**: `POST http://localhost:5001/api/transactions`
+- **URL**: `POST http://localhost:5001/api/transactions/set`
 - **Description**: Creates a new financial transaction
 - **Request Body**: JSON with transaction details
 - **Response**: Transaction details with a 201 Created status
 
 #### Get Transaction
-- **URL**: `GET http://localhost:5001/api/transactions`
+- **URL**: `POST http://localhost:5001/api/transactions/get`
 - **Description**: Retrieves details of a specific transaction
 - **Request Body**: 
 ```json
